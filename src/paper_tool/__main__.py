@@ -28,10 +28,6 @@ def main() -> None:
         loop.run_until_complete(app.start())
     except KeyboardInterrupt:
         app._shutdown()
-    except FileNotFoundError as e:
-        print(f"错误: 配置文件未找到 - {e}")
-        print("请复制 config.example.yaml 为 config.yaml 并修改配置")
-        sys.exit(1)
     except Exception as e:
         print(f"错误: {e}")
         sys.exit(1)
