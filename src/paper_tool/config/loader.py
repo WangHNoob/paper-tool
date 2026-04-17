@@ -22,9 +22,20 @@ class ConfigLoader:
         self._last_hash: str = ""
 
     def load(self) -> AppConfig:
-        """加载并校验配置文件"""
+        """加载并校验配置文件。
+
+        如果配置文件不存在，则使用默认配置并自动创建文件。
+        """
+        if not self._path.exists():
+            logger.info("配置文件不存在，使用默认配置: %s", self._path)
+            self._config = AppConfig(
+                monitor={"watch_dir": str(self._path.parent / "Inbox")},
+            )
+            self.save(self._config)
+            return self._config
+
         text = self._path.read_text(encoding="utf-8")
-        raw = yaml.safe_load(text)
+        raw = yaml.safe_load(text) or {}
         self._config = AppConfig.model_validate(raw)
         self._last_hash = hashlib.md5(text.encode()).hexdigest()
         logger.info("配置加载成功: %s", self._path)
@@ -59,12 +70,14 @@ class ConfigLoader:
         返回新的 AppConfig 如果已重新加载，否则返回 None。
         """
         try:
+            if not self._path.exists():
+                return None
             text = self._path.read_text(encoding="utf-8")
             current_hash = hashlib.md5(text.encode()).hexdigest()
             if current_hash == self._last_hash:
                 return None
 
-            raw = yaml.safe_load(text)
+            raw = yaml.safe_load(text) or {}
             new_config = AppConfig.model_validate(raw)
             self._config = new_config
             self._last_hash = current_hash
