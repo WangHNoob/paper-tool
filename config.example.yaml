@@ -1,0 +1,48 @@
+monitor:
+  watch_dir: "D:/Papers/Inbox"
+  recursive: false
+  debounce_seconds: 3.0
+  file_extensions: [".pdf"]
+
+llm_backend: "ollama"  # ollama / openai / vllm
+
+ollama:
+  model: "qwen2.5:7b"
+  base_url: "http://localhost:11434"
+  temperature: 0.3
+  timeout: 60.0
+
+openai:
+  api_key: "sk-xxx"
+  base_url: "https://api.deepseek.com/v1"
+  model: "deepseek-chat"
+  temperature: 0.3
+  max_tokens: 1024
+
+vllm:
+  base_url: "http://localhost:8000/v1"
+  model: "Qwen/Qwen2.5-7B-Instruct"
+  api_key: "EMPTY"
+  temperature: 0.3
+  timeout: 60.0
+
+rename:
+  template: "{分类}/{作者}_{年份}_{标题}.pdf"
+  output_base_dir: "D:/Papers/Sorted"
+  conflict_strategy: "append_number"  # append_number / skip
+
+classification:
+  labels:
+    - "机器学习"
+    - "自然语言处理"
+    - "计算机视觉"
+    - "数据挖掘"
+    - "网络与安全"
+    - "系统与架构"
+    - "其他"
+  prompt_template: null
+
+database:
+  path: "data/paper_tool.db"
+
+log_level: "INFO"
