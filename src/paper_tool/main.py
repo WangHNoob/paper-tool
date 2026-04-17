@@ -6,6 +6,7 @@ import signal
 import sys
 
 from .config.loader import ConfigLoader
+from .config.schema import AppConfig
 from .core.pipeline import Pipeline
 from .db.database import Database
 from .db.operations import list_operations
@@ -62,6 +63,8 @@ class PaperToolApp:
 
         # 初始化 GUI
         self._gui = GUIApp(
+            config_loader=self._config_loader,
+            on_config_saved=self._apply_config,
             on_rollback=self._do_rollback,
             on_refresh=self._list_operations,
         )
@@ -87,10 +90,15 @@ class PaperToolApp:
             await asyncio.sleep(CONFIG_RELOAD_INTERVAL)
             new_config = self._config_loader.check_and_reload()
             if new_config is not None:
-                logger.info("配置已更新，重新初始化分类器...")
-                if self._pipeline is not None:
-                    self._pipeline._config = new_config
-                    self._pipeline.init_classifier()
+                logger.info("配置文件已变更，热重载...")
+                self._apply_config(new_config)
+
+    def _apply_config(self, new_config: AppConfig) -> None:
+        """应用新配置（来自 GUI 保存或热重载）"""
+        logger.info("应用新配置...")
+        if self._pipeline is not None:
+            self._pipeline._config = new_config
+            self._pipeline.init_classifier()
 
     def _pause(self) -> None:
         if self._watcher:
