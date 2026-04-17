@@ -3,7 +3,7 @@
 import logging
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox, scrolledtext, filedialog
 from typing import Callable
 
 from ..config.loader import ConfigLoader
@@ -105,7 +105,7 @@ class GUIApp:
 
         # ── 监控设置 ──
         self._section("文件监控")
-        self._entry("monitor.watch_dir", "监控目录", config.monitor.watch_dir)
+        self._dir_entry("monitor.watch_dir", "监控目录", config.monitor.watch_dir)
         self._check("monitor.recursive", "递归监控子目录", config.monitor.recursive)
         self._entry("monitor.debounce_seconds", "防抖间隔 (秒)", str(config.monitor.debounce_seconds))
 
@@ -135,7 +135,7 @@ class GUIApp:
         # ── 重命名配置 ──
         self._section("重命名规则")
         self._entry("rename.template", "文件名模板", config.rename.template)
-        self._entry("rename.output_base_dir", "输出目录", config.rename.output_base_dir)
+        self._dir_entry("rename.output_base_dir", "输出目录", config.rename.output_base_dir)
         self._combo(
             "rename.conflict_strategy",
             "冲突策略",
@@ -178,6 +178,24 @@ class GUIApp:
         var = tk.StringVar(value=default)
         entry = ttk.Entry(row, textvariable=var, show=show or "")
         entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
+        self._vars[key] = var
+
+    def _dir_entry(self, key: str, label: str, default: str) -> None:
+        """创建带"浏览"按钮的目录选择输入框"""
+        row = ttk.Frame(self._current_section)
+        row.pack(fill=tk.X, padx=8, pady=3)
+
+        ttk.Label(row, text=label, width=18, anchor="w").pack(side=tk.LEFT)
+        var = tk.StringVar(value=default)
+        entry = ttk.Entry(row, textvariable=var)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
+
+        def _browse():
+            chosen = filedialog.askdirectory(initialdir=var.get() or None)
+            if chosen:
+                var.set(chosen)
+
+        ttk.Button(row, text="浏览...", command=_browse, width=6).pack(side=tk.LEFT, padx=(4, 0))
         self._vars[key] = var
 
     def _combo(self, key: str, label: str, values: list[str], default: str) -> None:
