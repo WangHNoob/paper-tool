@@ -100,6 +100,17 @@ class PaperToolApp:
             self._pipeline._config = new_config
             self._pipeline.init_classifier()
 
+        # 监控目录变更时重启 watcher
+        if self._watcher is not None:
+            self._watcher.stop()
+            self._watcher = PDFWatcher(
+                loop=self._loop,
+                queue=self._pipeline.queue.queue,
+                config=new_config.monitor,
+            )
+            self._watcher.start()
+            logger.info("文件监控已重启，监控目录: %s", new_config.monitor.watch_dir)
+
     def _pause(self) -> None:
         if self._watcher:
             self._watcher.pause()

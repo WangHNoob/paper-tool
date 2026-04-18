@@ -77,6 +77,7 @@ class DatabaseConfig(BaseModel):
 class AppConfig(BaseModel):
     monitor: MonitorConfig
     llm_backend: str = "ollama"
+    llm_enabled: bool = False
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     vllm: VLLMConfig = Field(default_factory=VLLMConfig)
