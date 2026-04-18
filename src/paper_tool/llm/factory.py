@@ -25,6 +25,7 @@ def create_chat_model(config: AppConfig) -> BaseChatModel:
                 model=config.ollama.model,
                 base_url=config.ollama.base_url,
                 temperature=config.ollama.temperature,
+                num_predict=4096,
             )
         case "openai":
             from langchain_openai import ChatOpenAI

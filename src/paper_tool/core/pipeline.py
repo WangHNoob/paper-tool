@@ -38,13 +38,14 @@ class Pipeline:
         return self._queue
 
     def init_classifier(self) -> None:
-        """初始化分类器（需在事件循环中调用）"""
+        """初始化分类器"""
         chat_model = create_chat_model(self._config)
         self._classifier = PaperClassifier(
             chat_model=chat_model,
             labels=self._config.classification.labels,
             custom_prompt=self._config.classification.prompt_template,
         )
+        logger.info("LLM 分类器已初始化，后端: %s", self._config.llm_backend)
 
     def start(self) -> None:
         """启动队列消费"""
@@ -145,16 +146,11 @@ class Pipeline:
         )
         logger.info("处理完成: %s -> %s", path.name, actual_path.name)
 
-    @async_retry(
-        max_attempts=3,
-        delays=(5.0, 15.0, 45.0),
-        retryable_exceptions=(Exception,),
-    )
     async def _classify(self, paper_info: PaperInfo) -> ClassifyResult:
         """分类论文，失败时回退到规则分类"""
         if self._classifier is None:
             logger.warning("分类器未初始化，使用回退分类")
-            return self._classifier.fallback_classify(paper_info) if self._classifier else ClassifyResult(
+            return ClassifyResult(
                 category="其他",
                 confidence=0.0,
                 reasoning="分类器未初始化",
@@ -166,4 +162,5 @@ class Pipeline:
             return result
         except Exception as e:
             logger.warning("LLM 分类失败，使用回退分类: %s", e)
-            return self._classifier.fallback_classify(paper_info)
+            _, result = self._classifier.fallback_classify(paper_info)
+            return result
