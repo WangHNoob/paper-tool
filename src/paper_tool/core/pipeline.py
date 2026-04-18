@@ -13,7 +13,6 @@ from ..llm.classifier import PaperClassifier
 from ..llm.factory import create_chat_model
 from ..renamer.mover import FileMover
 from ..renamer.template import render_template
-from ..utils.retry import async_retry
 from .models import ClassifyResult, PaperInfo, TaskStatus
 from .queue import ProcessingQueue
 
