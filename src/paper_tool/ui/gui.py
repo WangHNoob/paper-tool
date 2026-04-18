@@ -558,8 +558,9 @@ class GUIApp(QMainWindow):
 
     def _add_dir_field(self, form: QFormLayout, label: str, key: str) -> QWidget:
         row = QWidget()
+        row.setFixedHeight(40)
         h = QHBoxLayout(row)
-        h.setContentsMargins(0, 0, 0, 0)
+        h.setContentsMargins(0, 4, 0, 4)
         entry = QLineEdit()
         self._fields[key] = entry
         h.addWidget(entry, 1)
