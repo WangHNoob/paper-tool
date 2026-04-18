@@ -49,7 +49,7 @@ MUTED_FG = "#9CA3AF"
 LIGHT_PALETTE = {
     QPalette.ColorRole.Window: "#FFFFFF",
     QPalette.ColorRole.WindowText: "#1F2937",
-    QPalette.ColorRole.Base: "#F9FAFB",
+    QPalette.ColorRole.Base: "#FFFFFF",
     QPalette.ColorRole.AlternateBase: "#F3F4F6",
     QPalette.ColorRole.Text: "#1F2937",
     QPalette.ColorRole.Button: "#F3F4F6",
@@ -59,22 +59,24 @@ LIGHT_PALETTE = {
     QPalette.ColorRole.ToolTipBase: "#1F2937",
     QPalette.ColorRole.ToolTipText: "#F9FAFB",
     QPalette.ColorRole.PlaceholderText: "#9CA3AF",
+    QPalette.ColorRole.Mid: "#D1D5DB",
 }
 
-# 深色主题
+# 深色主题（柔和灰，不偏蓝黑）
 DARK_PALETTE = {
-    QPalette.ColorRole.Window: "#1E1E2E",
-    QPalette.ColorRole.WindowText: "#CDD6F4",
-    QPalette.ColorRole.Base: "#181825",
-    QPalette.ColorRole.AlternateBase: "#1E1E2E",
-    QPalette.ColorRole.Text: "#CDD6F4",
-    QPalette.ColorRole.Button: "#313244",
-    QPalette.ColorRole.ButtonText: "#CDD6F4",
+    QPalette.ColorRole.Window: "#2B2B2B",
+    QPalette.ColorRole.WindowText: "#D4D4D4",
+    QPalette.ColorRole.Base: "#333333",
+    QPalette.ColorRole.AlternateBase: "#3A3A3A",
+    QPalette.ColorRole.Text: "#D4D4D4",
+    QPalette.ColorRole.Button: "#3C3C3C",
+    QPalette.ColorRole.ButtonText: "#D4D4D4",
     QPalette.ColorRole.Highlight: ACCENT,
     QPalette.ColorRole.HighlightedText: "#FFFFFF",
-    QPalette.ColorRole.ToolTipBase: "#313244",
-    QPalette.ColorRole.ToolTipText: "#CDD6F4",
-    QPalette.ColorRole.PlaceholderText: "#6C7086",
+    QPalette.ColorRole.ToolTipBase: "#3C3C3C",
+    QPalette.ColorRole.ToolTipText: "#D4D4D4",
+    QPalette.ColorRole.PlaceholderText: "#808080",
+    QPalette.ColorRole.Mid: "#555555",
 }
 
 # QSS
@@ -85,7 +87,7 @@ STYLE_COMMON = """
         border-radius: 6px;
         padding: 4px 12px;
     }
-    QPushButton:hover { background: rgba(0,0,0,0.06); }
+    QPushButton:hover { background: rgba(128,128,128,0.12); }
     QLineEdit, QComboBox {
         border: 1px solid palette(mid);
         border-radius: 4px;
@@ -102,6 +104,7 @@ STYLE_COMMON = """
     QTableWidget {
         gridline-color: palette(mid);
         selection-background-color: """ + ACCENT + """33;
+        alternate-background-color: palette(alternate-base);
     }
     QTableWidget::item { padding: 4px; }
     QHeaderView::section {
@@ -116,6 +119,16 @@ STYLE_COMMON = """
         border-radius: 4px;
         padding: 4px;
     }
+    QStatusBar {
+        border-top: 1px solid palette(mid);
+    }
+"""
+
+SIDEBAR_LIGHT = """
+    #sidebar { background: #F0F0F0; border-right: 1px solid #D1D5DB; }
+"""
+SIDEBAR_DARK = """
+    #sidebar { background: #242424; border-right: 1px solid #444444; }
 """
 
 SECTION_NAMES = ["通用", "LLM"]
@@ -135,7 +148,8 @@ def _apply_theme(dark: bool) -> None:
         return
     pal = _build_palette(DARK_PALETTE if dark else LIGHT_PALETTE)
     app.setPalette(pal)
-    app.setStyleSheet(STYLE_COMMON)
+    sidebar_css = SIDEBAR_DARK if dark else SIDEBAR_LIGHT
+    app.setStyleSheet(STYLE_COMMON + sidebar_css)
 
 
 # ── 自定义组件 ──
@@ -277,6 +291,7 @@ class GUIApp(QMainWindow):
 
         # 侧边栏
         sidebar = QFrame()
+        sidebar.setObjectName("sidebar")
         sidebar.setFixedWidth(SIDEBAR_W)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(6, 12, 6, 12)
