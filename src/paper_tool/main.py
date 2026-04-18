@@ -2,8 +2,9 @@
 
 import asyncio
 import logging
-import signal
-import sys
+
+from PyQt6.QtCore import QObject
+from PyQt6.QtWidgets import QApplication
 
 from .config.loader import ConfigLoader
 from .config.schema import AppConfig
@@ -14,6 +15,7 @@ from .db.rollback import rollback_operation
 from .monitor.watcher import PDFWatcher
 from .ui.gui import GUIApp
 from .ui.tray import TrayApp
+from .utils.asyncio_thread import AsyncioThread
 from .utils.logging import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -21,22 +23,23 @@ logger = logging.getLogger(__name__)
 CONFIG_RELOAD_INTERVAL = 30  # 秒
 
 
-class PaperToolApp:
+class PaperToolApp(QObject):
     """Paper Tool 主应用"""
 
     def __init__(self, config_path: str):
+        super().__init__()
         self._config_path = config_path
         self._config_loader = ConfigLoader(config_path)
+        self._asyncio_thread: AsyncioThread | None = None
         self._db: Database | None = None
         self._pipeline: Pipeline | None = None
         self._watcher: PDFWatcher | None = None
         self._tray: TrayApp | None = None
         self._gui: GUIApp | None = None
-        self._loop: asyncio.AbstractEventLoop | None = None
         self._running = False
 
-    async def start(self) -> None:
-        """启动应用"""
+    def start(self) -> None:
+        """启动应用（非阻塞，QApplication 在主线程运行）"""
         logger.info("Paper Tool 启动中...")
 
         # 加载配置
@@ -47,21 +50,25 @@ class PaperToolApp:
         self._db = Database(config.database.path)
         self._db.connect()
 
+        # 启动 asyncio 线程
+        self._asyncio_thread = AsyncioThread()
+        self._asyncio_thread.start()
+        loop = self._asyncio_thread.loop
+
         # 初始化流水线
         self._pipeline = Pipeline(config, self._db)
         self._pipeline.init_classifier()
-        self._pipeline.start()
+        loop.call_soon_threadsafe(self._pipeline.start)
 
         # 初始化文件监控
-        self._loop = asyncio.get_event_loop()
         self._watcher = PDFWatcher(
-            loop=self._loop,
+            loop=loop,
             queue=self._pipeline.queue.queue,
             config=config.monitor,
         )
         self._watcher.start()
 
-        # 初始化 GUI
+        # 初始化 GUI（Qt 主线程）
         self._gui = GUIApp(
             config_loader=self._config_loader,
             on_config_saved=self._apply_config,
@@ -69,21 +76,22 @@ class PaperToolApp:
             on_refresh=self._list_operations,
             on_delete=self._do_delete,
         )
+        self._gui.show()
 
         # 初始化系统托盘
         self._tray = TrayApp(
             on_pause=self._pause,
             on_resume=self._resume,
-            on_show_gui=lambda: self._gui.start(),
+            on_show_gui=self._gui.show,
             on_quit=self._shutdown,
         )
-        self._tray.start()
+        self._tray.show()
 
         self._running = True
         logger.info("Paper Tool 已启动，监控目录: %s", config.monitor.watch_dir)
 
         # 启动配置热重载协程
-        await self._config_reload_loop()
+        self._asyncio_thread.run_coroutine(self._config_reload_loop())
 
     async def _config_reload_loop(self) -> None:
         """定时检查配置热重载"""
@@ -101,11 +109,10 @@ class PaperToolApp:
             self._pipeline._config = new_config
             self._pipeline.init_classifier()
 
-        # 监控目录变更时重启 watcher
         if self._watcher is not None:
             self._watcher.stop()
             self._watcher = PDFWatcher(
-                loop=self._loop,
+                loop=self._asyncio_thread.loop,
                 queue=self._pipeline.queue.queue,
                 config=new_config.monitor,
             )
@@ -129,15 +136,12 @@ class PaperToolApp:
             self._watcher.stop()
         if self._pipeline:
             self._pipeline.stop()
-        if self._tray:
-            self._tray.stop()
-        if self._gui:
-            self._gui.stop()
+        if self._asyncio_thread:
+            self._asyncio_thread.stop()
         if self._db:
             self._db.close()
 
-        if self._loop and self._loop.is_running():
-            self._loop.stop()
+        QApplication.quit()
 
     def _do_rollback(self, op_id: int) -> bool:
         if self._db is None:

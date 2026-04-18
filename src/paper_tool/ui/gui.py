@@ -1,40 +1,203 @@
-"""CustomTkinter GUI - 侧边栏导航 + 分段配置页"""
+"""PyQt6 GUI - 侧边栏导航 + 分段配置页"""
 
 import logging
-import threading
-import tkinter as tk
-from tkinter import messagebox, filedialog, ttk
 from typing import Callable
 
-import customtkinter as ctk
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QColor, QFont, QPalette, QTextCursor
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QStatusBar,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+    QStackedWidget,
+    QFrame,
+    QButtonGroup,
+)
 
 from ..config.loader import ConfigLoader
-from ..utils.logging import _CSTFormatter
 from ..config.schema import AppConfig
+from ..utils.logging import _CSTFormatter
 
 logger = logging.getLogger(__name__)
 
-# ── 字体 & 样式常量 ──
+# ── 样式常量 ──
 FONT_FAMILY = "Segoe UI"
-FONT_TITLE = (FONT_FAMILY, 15, "bold")
-FONT_SECTION = (FONT_FAMILY, 13, "bold")
-FONT_BODY = (FONT_FAMILY, 12)
-FONT_SMALL = (FONT_FAMILY, 11)
-FONT_MONO = ("Consolas", 11)
-
-ACCENT = ("#3B82F6", "#2563EB")
-ACCENT_HOVER = ("#2563EB", "#1D4ED8")
-SUCCESS_FG = ("#16A34A", "#22C55E")
-ERROR_FG = ("#DC2626", "#EF4444")
-WARN_FG = ("#D97706", "#F59E0B")
-MUTED_FG = ("#6B7280", "#9CA3AF")
-
 SIDEBAR_W = 62
+
+# 颜色
+ACCENT = "#3B82F6"
+ACCENT_HOVER = "#2563EB"
+SUCCESS_FG = "#16A34A"
+ERROR_FG = "#DC2626"
+MUTED_FG = "#9CA3AF"
+
+# 浅色主题
+LIGHT_PALETTE = {
+    QPalette.ColorRole.Window: "#FFFFFF",
+    QPalette.ColorRole.WindowText: "#1F2937",
+    QPalette.ColorRole.Base: "#F9FAFB",
+    QPalette.ColorRole.AlternateBase: "#F3F4F6",
+    QPalette.ColorRole.Text: "#1F2937",
+    QPalette.ColorRole.Button: "#F3F4F6",
+    QPalette.ColorRole.ButtonText: "#1F2937",
+    QPalette.ColorRole.Highlight: ACCENT,
+    QPalette.ColorRole.HighlightedText: "#FFFFFF",
+    QPalette.ColorRole.ToolTipBase: "#1F2937",
+    QPalette.ColorRole.ToolTipText: "#F9FAFB",
+    QPalette.ColorRole.PlaceholderText: "#9CA3AF",
+}
+
+# 深色主题
+DARK_PALETTE = {
+    QPalette.ColorRole.Window: "#1E1E2E",
+    QPalette.ColorRole.WindowText: "#CDD6F4",
+    QPalette.ColorRole.Base: "#181825",
+    QPalette.ColorRole.AlternateBase: "#1E1E2E",
+    QPalette.ColorRole.Text: "#CDD6F4",
+    QPalette.ColorRole.Button: "#313244",
+    QPalette.ColorRole.ButtonText: "#CDD6F4",
+    QPalette.ColorRole.Highlight: ACCENT,
+    QPalette.ColorRole.HighlightedText: "#FFFFFF",
+    QPalette.ColorRole.ToolTipBase: "#313244",
+    QPalette.ColorRole.ToolTipText: "#CDD6F4",
+    QPalette.ColorRole.PlaceholderText: "#6C7086",
+}
+
+# QSS
+STYLE_COMMON = """
+    QMainWindow { background: transparent; }
+    QPushButton {
+        border: none;
+        border-radius: 6px;
+        padding: 4px 12px;
+    }
+    QPushButton:hover { background: rgba(0,0,0,0.06); }
+    QLineEdit, QComboBox {
+        border: 1px solid palette(mid);
+        border-radius: 4px;
+        padding: 4px 8px;
+        min-height: 28px;
+    }
+    QLineEdit:focus, QComboBox:focus {
+        border-color: """ + ACCENT + """;
+    }
+    QComboBox::drop-down {
+        border: none;
+        width: 20px;
+    }
+    QTableWidget {
+        gridline-color: palette(mid);
+        selection-background-color: """ + ACCENT + """33;
+    }
+    QTableWidget::item { padding: 4px; }
+    QHeaderView::section {
+        background: palette(button);
+        padding: 6px;
+        border: none;
+        border-bottom: 2px solid """ + ACCENT + """;
+        font-weight: bold;
+    }
+    QTextEdit {
+        border: 1px solid palette(mid);
+        border-radius: 4px;
+        padding: 4px;
+    }
+"""
+
 SECTION_NAMES = ["通用", "LLM"]
 
 
-class GUIApp:
-    """CustomTkinter GUI 应用"""
+def _build_palette(mapping: dict) -> QPalette:
+    pal = QPalette()
+    for role, color in mapping.items():
+        pal.setColor(role, QColor(color))
+    return pal
+
+
+def _apply_theme(dark: bool) -> None:
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is None:
+        return
+    pal = _build_palette(DARK_PALETTE if dark else LIGHT_PALETTE)
+    app.setPalette(pal)
+    app.setStyleSheet(STYLE_COMMON)
+
+
+# ── 自定义组件 ──
+
+class SegmentedGroup(QWidget):
+    """分段选择器，模拟 CTkSegmentedButton"""
+
+    def __init__(self, labels: list[str], parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self._buttons: list[QPushButton] = []
+        self._group = QButtonGroup(self)
+        self._group.setExclusive(True)
+        for i, label in enumerate(labels):
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setMinimumHeight(30)
+            self._group.addButton(btn, i)
+            layout.addWidget(btn)
+            self._buttons.append(btn)
+        self._group.idClicked.connect(self._on_clicked)
+        self._callback = None
+
+    def on_change(self, callback) -> None:
+        self._callback = callback
+
+    def set_current(self, index: int) -> None:
+        if 0 <= index < len(self._buttons):
+            self._buttons[index].setChecked(True)
+            self._update_styles(index)
+
+    def _on_clicked(self, idx: int) -> None:
+        self._update_styles(idx)
+        if self._callback:
+            self._callback(idx)
+
+    def _update_styles(self, active: int) -> None:
+        for i, btn in enumerate(self._buttons):
+            if i == active:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {ACCENT};
+                        color: white;
+                        border-radius: 4px;
+                        font-weight: bold;
+                    }}
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background: transparent;
+                        border-radius: 4px;
+                    }
+                """)
+
+
+# ── GUIApp ──
+
+class GUIApp(QMainWindow):
+    """PyQt6 GUI 应用"""
 
     def __init__(
         self,
@@ -43,27 +206,35 @@ class GUIApp:
         on_rollback: Callable[[int], bool],
         on_refresh: Callable[[], list[dict]],
         on_delete: Callable[[list[int]], int] | None = None,
+        parent=None,
     ):
+        super().__init__(parent)
         self._config_loader = config_loader
         self._on_config_saved = on_config_saved
         self._on_rollback = on_rollback
         self._on_refresh = on_refresh
         self._on_delete = on_delete
-        self._root: ctk.CTk | None = None
-        self._thread: threading.Thread | None = None
-        self._vars: dict[str, tk.Variable] = {}
-        self._current_page: str = ""
-        self._nav_buttons: dict[str, ctk.CTkButton] = {}
-        self._main_area: ctk.CTkFrame | None = None
-        self._log_text: ctk.CTkTextbox | None = None
-        self._config_status: ctk.CTkLabel | None = None
-        self._seg_frames: dict[str, ctk.CTkFrame] = {}
-        self._active_seg: str = ""
-        # LLM 子段
-        self._llm_sub_frames: dict[str, ctk.CTkFrame] = {}
-        self._active_llm_sub: str = ""
+        self._is_dark = False
+
+        # 配置字段 widgets
+        self._fields: dict[str, QLineEdit | QComboBox | QCheckBox] = {}
+
+        # 导航按钮
+        self._nav_buttons: list[QPushButton] = []
+
+        self.setWindowTitle("Paper Tool")
+        self.setMinimumSize(780, 540)
+        self.resize(960, 720)
+
+        # 检测系统主题
+        self._detect_system_theme()
+
+        # 构建布局
+        self._build_layout()
+        self._navigate(0)
+
         # 持久化日志 handler
-        self._text_handler = TextHandler()
+        self._text_handler = QtTextHandler()
         self._text_handler.setFormatter(
             _CSTFormatter("[%(asctime)s] %(levelname)-7s %(message)s", datefmt="%H:%M:%S")
         )
@@ -72,426 +243,348 @@ class GUIApp:
     # ── 生命周期 ──
 
     def start(self) -> None:
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+        self.show()
 
     def stop(self) -> None:
-        if self._root is not None:
-            try:
-                self._root.quit()
-                self._root.destroy()
-            except Exception:
-                pass
+        self.close()
 
-    def _run(self) -> None:
-        ctk.set_appearance_mode("System")
-        ctk.set_default_color_theme("blue")
+    # ── 主题 ──
 
-        self._root = ctk.CTk()
-        self._root.title("Paper Tool")
-        self._root.geometry("960x720")
-        self._root.minsize(780, 540)
-        self._root.protocol("WM_DELETE_WINDOW", self._on_close)
+    def _detect_system_theme(self) -> None:
+        try:
+            from PyQt6.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app and app.styleHints().colorScheme() == Qt.ColorScheme.Dark:
+                self._is_dark = True
+            else:
+                self._is_dark = False
+        except Exception:
+            self._is_dark = False
+        _apply_theme(self._is_dark)
 
-        self._build_layout()
-        self._navigate("config")
-        self._root.mainloop()
+    def _toggle_theme(self) -> None:
+        self._is_dark = not self._is_dark
+        _apply_theme(self._is_dark)
 
     # ── 主布局 ──
 
     def _build_layout(self) -> None:
-        self._root.grid_rowconfigure(0, weight=1)
-        self._root.grid_columnconfigure(1, weight=1)
+        central = QWidget()
+        self.setCentralWidget(central)
+        main_layout = QHBoxLayout(central)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        sidebar = ctk.CTkFrame(self._root, width=SIDEBAR_W, corner_radius=0)
-        sidebar.grid(row=0, column=0, sticky="ns")
-        sidebar.grid_propagate(False)
+        # 侧边栏
+        sidebar = QFrame()
+        sidebar.setFixedWidth(SIDEBAR_W)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(6, 12, 6, 12)
+        sidebar_layout.setSpacing(4)
 
-        ctk.CTkLabel(
-            sidebar, text="PT", font=(FONT_FAMILY, 16, "bold"), text_color=ACCENT,
-        ).pack(pady=(18, 20))
+        logo = QLabel("PT")
+        logo.setFont(QFont(FONT_FAMILY, 14, QFont.Weight.Bold))
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet(f"color: {ACCENT};")
+        sidebar_layout.addWidget(logo)
+        sidebar_layout.addSpacing(12)
 
-        for symbol, page in [("\u2699", "config"), ("\u2630", "operations"), ("\u2261", "logs")]:
-            btn = ctk.CTkButton(
-                sidebar, text=symbol, width=40, height=40,
-                font=(FONT_FAMILY, 18),
-                fg_color="transparent",
-                text_color=("gray30", "gray70"),
-                hover_color=("gray80", "gray35"),
-                corner_radius=8,
-                command=lambda p=page: self._navigate(p),
-            )
-            btn.pack(pady=(5, 5), padx=10)
-            self._nav_buttons[page] = btn
+        pages = ["⚙", "☰", "≡"]
+        for i, symbol in enumerate(pages):
+            btn = QPushButton(symbol)
+            btn.setFixedSize(44, 40)
+            btn.setFont(QFont(FONT_FAMILY, 16))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(lambda checked, idx=i: self._navigate(idx))
+            sidebar_layout.addWidget(btn)
+            self._nav_buttons.append(btn)
 
-        ctk.CTkButton(
-            sidebar, text="\u25D0", width=40, height=40,
-            font=(FONT_FAMILY, 16),
-            fg_color="transparent",
-            text_color=("gray30", "gray70"),
-            hover_color=("gray80", "gray35"),
-            corner_radius=8,
-            command=self._toggle_theme,
-        ).pack(side="bottom", pady=(0, 15), padx=10)
+        sidebar_layout.addStretch()
 
-        self._main_area = ctk.CTkFrame(self._root, fg_color="transparent")
-        self._main_area.grid(row=0, column=1, sticky="nsew", padx=(0, 8), pady=8)
+        theme_btn = QPushButton("◐")
+        theme_btn.setFixedSize(44, 40)
+        theme_btn.setFont(QFont(FONT_FAMILY, 14))
+        theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        theme_btn.clicked.connect(self._toggle_theme)
+        sidebar_layout.addWidget(theme_btn)
 
-        status_bar = ctk.CTkFrame(self._root, height=30, corner_radius=0)
-        status_bar.grid(row=1, column=0, columnspan=2, sticky="ew")
-        status_bar.grid_propagate(False)
+        main_layout.addWidget(sidebar)
 
+        # 内容区 QStackedWidget
+        self._stack = QStackedWidget()
+        self._stack.addWidget(self._build_config_page())   # index 0
+        self._stack.addWidget(self._build_operations_page()) # index 1
+        self._stack.addWidget(self._build_logs_page())       # index 2
+        main_layout.addWidget(self._stack, 1)
+
+        # 状态栏
         config = self._config_loader.config
-        ctk.CTkLabel(
-            status_bar,
-            text=f"  \u25CF 监控中  |  后端: {config.llm_backend}",
-            font=FONT_SMALL, anchor="w",
-        ).pack(side="left", padx=10, pady=4)
+        status = QStatusBar()
+        status.setFixedHeight(28)
+        self.setStatusBar(status)
+        status.showMessage(f"  ● 监控中  |  后端: {config.llm_backend}")
 
-    def _navigate(self, page: str) -> None:
-        if self._current_page == "logs":
-            self._text_handler.clear_widget()
-
-        for w in self._main_area.winfo_children():
-            w.destroy()
-
-        for name, btn in self._nav_buttons.items():
-            btn.configure(
-                fg_color=("gray75", "gray30") if name == page else "transparent"
-            )
-
-        if page == "config":
-            self._build_config_page()
-        elif page == "operations":
-            self._build_operations_page()
-        elif page == "logs":
-            self._build_logs_page()
-        self._current_page = page
-
-    def _toggle_theme(self) -> None:
-        mode = ctk.get_appearance_mode()
-        ctk.set_appearance_mode("Dark" if mode == "Light" else "Light")
+    def _navigate(self, index: int) -> None:
+        self._stack.setCurrentIndex(index)
+        for i, btn in enumerate(self._nav_buttons):
+            if i == index:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: rgba(59, 130, 246, 0.15);
+                        border-radius: 8px;
+                        color: {ACCENT};
+                    }}
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background: transparent;
+                        border-radius: 8px;
+                    }
+                    QPushButton:hover { background: rgba(0,0,0,0.06); }
+                """)
 
     # ── 配置页 ──
 
-    def _build_config_page(self) -> None:
-        ctk.CTkLabel(
-            self._main_area, text="配置", font=FONT_TITLE, anchor="w",
-        ).pack(fill="x", padx=16, pady=(12, 2))
-        ctk.CTkLabel(
-            self._main_area, text="修改后点击「保存配置」生效",
-            font=FONT_SMALL, text_color=MUTED_FG, anchor="w",
-        ).pack(fill="x", padx=16, pady=(0, 8))
+    def _build_config_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 12, 16, 12)
 
-        seg_var = tk.StringVar(value="通用")
-        seg = ctk.CTkSegmentedButton(
-            self._main_area, values=SECTION_NAMES,
-            variable=seg_var, command=self._on_seg_change,
-            font=FONT_SMALL,
-        )
-        seg.pack(fill="x", padx=16, pady=(0, 10))
-        self._seg_var_ref = seg_var
+        title = QLabel("配置")
+        title.setFont(QFont(FONT_FAMILY, 14, QFont.Weight.Bold))
+        layout.addWidget(title)
 
-        self._config_card = ctk.CTkFrame(self._main_area, border_width=1, corner_radius=8)
-        self._config_card.pack(fill="both", expand=True, padx=16)
-        self._config_card.pack_propagate(False)
+        hint = QLabel("修改后点击「保存配置」生效")
+        hint.setStyleSheet(f"color: {MUTED_FG};")
+        layout.addWidget(hint)
+        layout.addSpacing(4)
 
-        self._init_all_vars()
+        # 分段
+        self._config_seg = SegmentedGroup(SECTION_NAMES)
+        self._config_seg.on_change(self._on_seg_change)
+        layout.addWidget(self._config_seg)
+        layout.addSpacing(6)
 
-        # 预创建两个主段
-        self._seg_frames = {}
-        self._build_seg_general()
-        self._build_seg_llm()
+        # 段容器
+        self._seg_stack = QStackedWidget()
+        self._seg_stack.addWidget(self._build_seg_general())  # 0
+        self._seg_stack.addWidget(self._build_seg_llm())      # 1
+        layout.addWidget(self._seg_stack, 1)
 
         # 底部按钮
-        btn_row = ctk.CTkFrame(self._main_area, fg_color="transparent")
-        btn_row.pack(fill="x", padx=16, pady=(8, 12))
+        btn_row = QHBoxLayout()
+        save_btn = QPushButton("保存配置")
+        save_btn.setStyleSheet(f"background: {ACCENT}; color: white; border-radius: 4px; padding: 6px 20px;")
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.clicked.connect(self._save_config)
+        btn_row.addWidget(save_btn)
 
-        ctk.CTkButton(
-            btn_row, text="保存配置", width=120,
-            fg_color=ACCENT, hover_color=ACCENT_HOVER,
-            command=self._save_config,
-        ).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(
-            btn_row, text="重置为当前值", width=120,
-            fg_color="transparent", border_width=1,
-            text_color=("gray10", "gray90"),
-            hover_color=("gray80", "gray35"),
-            command=self._reset_config,
-        ).pack(side="left", padx=(0, 12))
-        self._config_status = ctk.CTkLabel(btn_row, text="", font=FONT_SMALL)
-        self._config_status.pack(side="left")
+        reset_btn = QPushButton("重置为当前值")
+        reset_btn.setStyleSheet("border: 1px solid palette(mid); border-radius: 4px; padding: 6px 20px;")
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.clicked.connect(self._reset_config)
+        btn_row.addWidget(reset_btn)
 
-        self._on_seg_change("通用")
+        self._config_status = QLabel("")
+        btn_row.addWidget(self._config_status)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
 
-    def _init_all_vars(self) -> None:
-        config = self._config_loader.config
-        defaults = {
-            "llm_backend": config.llm_backend,
-            "log_level": config.log_level,
-            "monitor.watch_dir": config.monitor.watch_dir,
-            "monitor.recursive": config.monitor.recursive,
-            "monitor.debounce_seconds": str(config.monitor.debounce_seconds),
-            "ollama.model": config.ollama.model,
-            "ollama.base_url": config.ollama.base_url,
-            "ollama.temperature": str(config.ollama.temperature),
-            "ollama.timeout": str(config.ollama.timeout),
-            "openai.api_key": config.openai.api_key,
-            "openai.base_url": config.openai.base_url,
-            "openai.model": config.openai.model,
-            "openai.temperature": str(config.openai.temperature),
-            "openai.max_tokens": str(config.openai.max_tokens),
-            "vllm.base_url": config.vllm.base_url,
-            "vllm.model": config.vllm.model,
-            "vllm.api_key": config.vllm.api_key,
-            "vllm.temperature": str(config.vllm.temperature),
-            "vllm.timeout": str(config.vllm.timeout),
-            "rename.template": config.rename.template,
-            "rename.output_base_dir": config.rename.output_base_dir,
-            "rename.conflict_strategy": config.rename.conflict_strategy,
-            "classification.labels": ", ".join(config.classification.labels),
-        }
-        for key, val in defaults.items():
-            if isinstance(val, bool):
-                self._vars[key] = tk.BooleanVar(value=val)
-            else:
-                self._vars[key] = tk.StringVar(value=val)
+        self._init_all_fields()
+        self._config_seg.set_current(0)
 
-    def _on_seg_change(self, name: str) -> None:
-        if self._active_seg and self._active_seg in self._seg_frames:
-            self._seg_frames[self._active_seg].pack_forget()
-        if name in self._seg_frames:
-            self._seg_frames[name].pack(fill="both", expand=True, padx=6, pady=6)
-        self._active_seg = name
+        return page
 
-    # ── 段构建辅助 ──
+    def _on_seg_change(self, idx: int) -> None:
+        self._seg_stack.setCurrentIndex(idx)
 
-    def _field_row(self, parent: ctk.CTkFrame) -> ctk.CTkFrame:
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", padx=14, pady=3)
-        return row
+    def _section_header(self, layout: QVBoxLayout, title: str) -> None:
+        label = QLabel(title)
+        label.setFont(QFont(FONT_FAMILY, 12, QFont.Weight.Bold))
+        label.setStyleSheet(f"color: {ACCENT};")
+        layout.addWidget(label)
+        line = QFrame()
+        line.setFixedHeight(1)
+        line.setStyleSheet("background: palette(mid);")
+        layout.addWidget(line)
+        layout.addSpacing(4)
 
-    def _add_entry(self, parent, label, key, show=None):
-        ctk.CTkLabel(parent, text=label, font=FONT_BODY, width=140, anchor="w").pack(side="left")
-        ctk.CTkEntry(parent, textvariable=self._vars[key], show=show or "", height=32).pack(
-            side="left", fill="x", expand=True, padx=(10, 0),
-        )
+    def _add_field(self, form: QFormLayout, label: str, key: str, widget=None) -> QWidget:
+        if widget is not None:
+            w = widget
+        else:
+            w = QLineEdit()
+        self._fields[key] = w
+        form.addRow(label, w)
+        return w
 
-    def _add_combo(self, parent, label, key, values):
-        ctk.CTkLabel(parent, text=label, font=FONT_BODY, width=140, anchor="w").pack(side="left")
-        ctk.CTkOptionMenu(
-            parent, variable=self._vars[key], values=values, height=32, font=FONT_BODY,
-        ).pack(side="left", fill="x", expand=True, padx=(10, 0))
+    def _add_combo_field(self, form: QFormLayout, label: str, key: str, values: list[str]) -> QComboBox:
+        combo = QComboBox()
+        combo.addItems(values)
+        combo.setEditable(False)
+        self._fields[key] = combo
+        form.addRow(label, combo)
+        return combo
 
-    def _add_dir(self, parent, label, key):
-        ctk.CTkLabel(parent, text=label, font=FONT_BODY, width=140, anchor="w").pack(side="left")
-        ctk.CTkEntry(parent, textvariable=self._vars[key], height=32).pack(
-            side="left", fill="x", expand=True, padx=(10, 0),
-        )
+    def _add_dir_field(self, form: QFormLayout, label: str, key: str) -> QWidget:
+        row = QWidget()
+        h = QHBoxLayout(row)
+        h.setContentsMargins(0, 0, 0, 0)
+        entry = QLineEdit()
+        self._fields[key] = entry
+        h.addWidget(entry, 1)
+        browse_btn = QPushButton("浏览")
+        browse_btn.setFixedWidth(56)
+        browse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
         def _browse():
-            chosen = filedialog.askdirectory(initialdir=self._vars[key].get() or None)
+            chosen = QFileDialog.getExistingDirectory(self, "选择目录", entry.text())
             if chosen:
-                self._vars[key].set(chosen)
+                entry.setText(chosen)
 
-        ctk.CTkButton(
-            parent, text="浏览", width=56, height=32,
-            fg_color=("gray75", "gray30"), hover_color=("gray65", "gray40"),
-            text_color=("gray10", "gray90"), font=FONT_SMALL, command=_browse,
-        ).pack(side="left", padx=(6, 0))
+        browse_btn.clicked.connect(_browse)
+        h.addWidget(browse_btn)
+        form.addRow(label, row)
+        return row
 
-    def _sub_header(self, parent: ctk.CTkFrame, title: str) -> None:
-        ctk.CTkLabel(
-            parent, text=title, font=FONT_SECTION, anchor="w", text_color=ACCENT,
-        ).pack(fill="x", padx=14, pady=(14, 2))
-        ctk.CTkFrame(parent, height=1, fg_color=("gray80", "gray30")).pack(
-            fill="x", padx=14, pady=(0, 6),
-        )
+    # ── 通用段 ──
 
-    # ── 通用段（基础 + 目录 + 监控 + 重命名 + 分类）──
+    def _build_seg_general(self) -> QWidget:
+        widget = QWidget()
+        scroll_layout = QVBoxLayout(widget)
+        scroll_layout.setContentsMargins(4, 8, 4, 4)
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setSpacing(8)
 
-    def _build_seg_general(self) -> None:
-        frame = ctk.CTkFrame(self._config_card, fg_color="transparent")
-        self._seg_frames["通用"] = frame
+        self._section_header(scroll_layout, "基础")
+        self._add_combo_field(form, "LLM 后端:", "llm_backend", ["ollama", "openai", "vllm"])
+        self._add_combo_field(form, "日志级别:", "log_level", ["DEBUG", "INFO", "WARNING", "ERROR"])
 
-        # ── 基础 ──
-        self._sub_header(frame, "基础")
-        r = self._field_row(frame)
-        self._add_combo(r, "LLM 后端", "llm_backend", ["ollama", "openai", "vllm"])
-        r = self._field_row(frame)
-        self._add_combo(r, "日志级别", "log_level", ["DEBUG", "INFO", "WARNING", "ERROR"])
+        scroll_layout.addLayout(form)
+        scroll_layout.addSpacing(8)
 
-        # ── 目录（监控 + 输出放一起）──
-        self._sub_header(frame, "目录")
-        r = self._field_row(frame)
-        self._add_dir(r, "监控目录", "monitor.watch_dir")
-        r = self._field_row(frame)
-        self._add_dir(r, "输出目录", "rename.output_base_dir")
+        form2 = QFormLayout()
+        form2.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form2.setSpacing(8)
+        self._section_header(scroll_layout, "目录")
+        self._add_dir_field(form2, "监控目录:", "monitor.watch_dir")
+        self._add_dir_field(form2, "输出目录:", "rename.output_base_dir")
+        scroll_layout.addLayout(form2)
+        scroll_layout.addSpacing(8)
 
-        # ── 监控选项 ──
-        self._sub_header(frame, "监控")
-        r = self._field_row(frame)
-        ctk.CTkCheckBox(
-            r, text="递归监控子目录", variable=self._vars["monitor.recursive"],
-            font=FONT_BODY, checkbox_width=20, checkbox_height=20,
-        ).pack(side="left")
-        r = self._field_row(frame)
-        self._add_entry(r, "防抖间隔 (秒)", "monitor.debounce_seconds")
+        form3 = QFormLayout()
+        form3.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form3.setSpacing(8)
+        self._section_header(scroll_layout, "监控")
+        cb = QCheckBox("递归监控子目录")
+        self._fields["monitor.recursive"] = cb
+        form3.addRow("", cb)
+        self._add_field(form3, "防抖间隔 (秒):", "monitor.debounce_seconds")
+        scroll_layout.addLayout(form3)
+        scroll_layout.addSpacing(8)
 
-        # ── 重命名 ──
-        self._sub_header(frame, "重命名")
-        r = self._field_row(frame)
-        self._add_entry(r, "文件名模板", "rename.template")
-        r = self._field_row(frame)
-        self._add_combo(r, "冲突策略", "rename.conflict_strategy", ["append_number", "skip"])
+        form4 = QFormLayout()
+        form4.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form4.setSpacing(8)
+        self._section_header(scroll_layout, "重命名")
+        self._add_field(form4, "文件名模板:", "rename.template")
+        self._add_combo_field(form4, "冲突策略:", "rename.conflict_strategy", ["append_number", "skip"])
+        scroll_layout.addLayout(form4)
+        scroll_layout.addSpacing(8)
 
-        # ── 分类 ──
-        self._sub_header(frame, "分类")
-        r = self._field_row(frame)
-        self._add_entry(r, "标签 (逗号分隔)", "classification.labels")
+        form5 = QFormLayout()
+        form5.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form5.setSpacing(8)
+        self._section_header(scroll_layout, "分类")
+        self._add_field(form5, "标签 (逗号分隔):", "classification.labels")
+        scroll_layout.addLayout(form5)
+        scroll_layout.addStretch()
 
-    # ── LLM 段（子切换 Ollama / OpenAI / vLLM）──
+        return widget
 
-    def _build_seg_llm(self) -> None:
-        frame = ctk.CTkFrame(self._config_card, fg_color="transparent")
-        self._seg_frames["LLM"] = frame
+    # ── LLM 段 ──
 
-        # 子切换栏
-        self._llm_sub_var = tk.StringVar(value="Ollama")
-        sub_seg = ctk.CTkSegmentedButton(
-            frame, values=["Ollama", "OpenAI", "vLLM"],
-            variable=self._llm_sub_var, command=self._on_llm_sub_change,
-            font=FONT_SMALL,
-        )
-        sub_seg.pack(fill="x", padx=14, pady=(12, 6))
+    def _build_seg_llm(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(4, 8, 4, 4)
 
-        # 子段容器
-        self._llm_sub_container = ctk.CTkFrame(frame, fg_color="transparent")
-        self._llm_sub_container.pack(fill="both", expand=True)
+        self._llm_seg = SegmentedGroup(["Ollama", "OpenAI", "vLLM"])
+        self._llm_seg.on_change(self._on_llm_sub_change)
+        layout.addWidget(self._llm_seg)
+        layout.addSpacing(6)
 
-        # 预创建三个子段
-        self._llm_sub_frames = {}
-        self._build_llm_ollama()
-        self._build_llm_openai()
-        self._build_llm_vllm()
+        self._llm_stack = QStackedWidget()
+        self._llm_stack.addWidget(self._build_llm_ollama())   # 0
+        self._llm_stack.addWidget(self._build_llm_openai())   # 1
+        self._llm_stack.addWidget(self._build_llm_vllm())     # 2
+        layout.addWidget(self._llm_stack, 1)
 
-        self._on_llm_sub_change("Ollama")
+        self._llm_seg.set_current(0)
+        return widget
 
-    def _on_llm_sub_change(self, name: str) -> None:
-        if self._active_llm_sub and self._active_llm_sub in self._llm_sub_frames:
-            self._llm_sub_frames[self._active_llm_sub].pack_forget()
-        if name in self._llm_sub_frames:
-            self._llm_sub_frames[name].pack(fill="both", expand=True, padx=6, pady=6)
-        self._active_llm_sub = name
+    def _on_llm_sub_change(self, idx: int) -> None:
+        self._llm_stack.setCurrentIndex(idx)
 
-    def _build_llm_ollama(self) -> None:
-        f = ctk.CTkFrame(self._llm_sub_container, fg_color="transparent")
-        self._llm_sub_frames["Ollama"] = f
-        ctk.CTkLabel(f, text="Ollama 配置", font=FONT_SECTION, anchor="w").pack(
-            fill="x", padx=14, pady=(10, 4),
-        )
-        ctk.CTkFrame(f, height=1, fg_color=("gray80", "gray30")).pack(
-            fill="x", padx=14, pady=(0, 10),
-        )
-        for label, key in [("模型名称", "ollama.model"), ("API 地址", "ollama.base_url"),
-                           ("Temperature", "ollama.temperature"), ("超时 (秒)", "ollama.timeout")]:
-            r = self._field_row(f)
-            self._add_entry(r, label, key)
+    def _build_llm_ollama(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(4, 8, 4, 4)
+        self._section_header(layout, "Ollama 配置")
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setSpacing(8)
+        self._add_field(form, "模型名称:", "ollama.model")
+        self._add_field(form, "API 地址:", "ollama.base_url")
+        self._add_field(form, "Temperature:", "ollama.temperature")
+        self._add_field(form, "超时 (秒):", "ollama.timeout")
+        layout.addLayout(form)
+        layout.addStretch()
+        return widget
 
-    def _build_llm_openai(self) -> None:
-        f = ctk.CTkFrame(self._llm_sub_container, fg_color="transparent")
-        self._llm_sub_frames["OpenAI"] = f
-        ctk.CTkLabel(f, text="OpenAI 兼容 API 配置", font=FONT_SECTION, anchor="w").pack(
-            fill="x", padx=14, pady=(10, 4),
-        )
-        ctk.CTkFrame(f, height=1, fg_color=("gray80", "gray30")).pack(
-            fill="x", padx=14, pady=(0, 10),
-        )
-        r = self._field_row(f)
-        self._add_entry(r, "API Key", "openai.api_key", show="*")
-        for label, key in [("API 地址", "openai.base_url"), ("模型名称", "openai.model"),
-                           ("Temperature", "openai.temperature"), ("Max Tokens", "openai.max_tokens")]:
-            r = self._field_row(f)
-            self._add_entry(r, label, key)
+    def _build_llm_openai(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(4, 8, 4, 4)
+        self._section_header(layout, "OpenAI 兼容 API 配置")
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setSpacing(8)
+        api_key_edit = QLineEdit()
+        api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self._add_field(form, "API Key:", "openai.api_key", api_key_edit)
+        self._add_field(form, "API 地址:", "openai.base_url")
+        self._add_field(form, "模型名称:", "openai.model")
+        self._add_field(form, "Temperature:", "openai.temperature")
+        self._add_field(form, "Max Tokens:", "openai.max_tokens")
+        layout.addLayout(form)
+        layout.addStretch()
+        return widget
 
-    def _build_llm_vllm(self) -> None:
-        f = ctk.CTkFrame(self._llm_sub_container, fg_color="transparent")
-        self._llm_sub_frames["vLLM"] = f
-        ctk.CTkLabel(f, text="vLLM 配置", font=FONT_SECTION, anchor="w").pack(
-            fill="x", padx=14, pady=(10, 4),
-        )
-        ctk.CTkFrame(f, height=1, fg_color=("gray80", "gray30")).pack(
-            fill="x", padx=14, pady=(0, 10),
-        )
-        r = self._field_row(f)
-        self._add_entry(r, "API Key", "vllm.api_key", show="*")
-        for label, key in [("API 地址", "vllm.base_url"), ("模型名称", "vllm.model"),
-                           ("Temperature", "vllm.temperature"), ("超时 (秒)", "vllm.timeout")]:
-            r = self._field_row(f)
-            self._add_entry(r, label, key)
+    def _build_llm_vllm(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(4, 8, 4, 4)
+        self._section_header(layout, "vLLM 配置")
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setSpacing(8)
+        api_key_edit = QLineEdit()
+        api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self._add_field(form, "API Key:", "vllm.api_key", api_key_edit)
+        self._add_field(form, "API 地址:", "vllm.base_url")
+        self._add_field(form, "模型名称:", "vllm.model")
+        self._add_field(form, "Temperature:", "vllm.temperature")
+        self._add_field(form, "超时 (秒):", "vllm.timeout")
+        layout.addLayout(form)
+        layout.addStretch()
+        return widget
 
     # ── 配置读写 ──
 
-    def _get_var(self, key: str) -> str:
-        return self._vars[key].get().strip()
-
-    def _collect_config(self) -> AppConfig:
-        labels_raw = self._get_var("classification.labels")
-        labels = [l.strip() for l in labels_raw.split(",") if l.strip()]
-
-        return AppConfig(
-            monitor={
-                "watch_dir": self._get_var("monitor.watch_dir"),
-                "recursive": self._vars["monitor.recursive"].get(),
-                "debounce_seconds": float(self._get_var("monitor.debounce_seconds")),
-            },
-            llm_backend=self._get_var("llm_backend"),
-            ollama={
-                "model": self._get_var("ollama.model"),
-                "base_url": self._get_var("ollama.base_url"),
-                "temperature": float(self._get_var("ollama.temperature")),
-                "timeout": float(self._get_var("ollama.timeout")),
-            },
-            openai={
-                "api_key": self._get_var("openai.api_key"),
-                "base_url": self._get_var("openai.base_url"),
-                "model": self._get_var("openai.model"),
-                "temperature": float(self._get_var("openai.temperature")),
-                "max_tokens": int(self._get_var("openai.max_tokens")),
-            },
-            vllm={
-                "base_url": self._get_var("vllm.base_url"),
-                "model": self._get_var("vllm.model"),
-                "api_key": self._get_var("vllm.api_key"),
-                "temperature": float(self._get_var("vllm.temperature")),
-                "timeout": float(self._get_var("vllm.timeout")),
-            },
-            rename={
-                "template": self._get_var("rename.template"),
-                "output_base_dir": self._get_var("rename.output_base_dir"),
-                "conflict_strategy": self._get_var("rename.conflict_strategy"),
-            },
-            classification={"labels": labels},
-            database={"path": self._config_loader.config.database.path},
-            log_level=self._get_var("log_level"),
-        )
-
-    def _save_config(self) -> None:
-        try:
-            new_config = self._collect_config()
-        except (ValueError, KeyError, tk.TclError) as e:
-            messagebox.showerror("配置校验失败", str(e))
-            return
-        try:
-            self._config_loader.save(new_config)
-        except OSError as e:
-            messagebox.showerror("保存失败", f"无法写入配置文件:\n{e}")
-            return
-        self._config_status.configure(text="\u2713 配置已保存", text_color=SUCCESS_FG)
-        self._on_config_saved(new_config)
-        logger.info("GUI 配置已保存并应用")
-
-    def _reset_config(self) -> None:
+    def _init_all_fields(self) -> None:
         config = self._config_loader.config
         mapping = {
             "llm_backend": config.llm_backend,
@@ -518,177 +611,275 @@ class GUIApp:
             "classification.labels": ", ".join(config.classification.labels),
         }
         for key, val in mapping.items():
-            self._vars[key].set(val)
-        self._vars["monitor.recursive"].set(config.monitor.recursive)
-        self._config_status.configure(text="已重置", text_color=MUTED_FG)
+            w = self._fields.get(key)
+            if w is None:
+                continue
+            if isinstance(w, QComboBox):
+                w.setCurrentText(val)
+            elif isinstance(w, QLineEdit):
+                w.setText(val)
+        cb = self._fields.get("monitor.recursive")
+        if isinstance(cb, QCheckBox):
+            cb.setChecked(config.monitor.recursive)
+
+    def _get_field(self, key: str) -> str:
+        w = self._fields.get(key)
+        if isinstance(w, QComboBox):
+            return w.currentText().strip()
+        if isinstance(w, QLineEdit):
+            return w.text().strip()
+        return ""
+
+    def _collect_config(self) -> AppConfig:
+        labels_raw = self._get_field("classification.labels")
+        labels = [l.strip() for l in labels_raw.split(",") if l.strip()]
+
+        cb = self._fields.get("monitor.recursive")
+        recursive = cb.isChecked() if isinstance(cb, QCheckBox) else False
+
+        return AppConfig(
+            monitor={
+                "watch_dir": self._get_field("monitor.watch_dir"),
+                "recursive": recursive,
+                "debounce_seconds": float(self._get_field("monitor.debounce_seconds")),
+            },
+            llm_backend=self._get_field("llm_backend"),
+            ollama={
+                "model": self._get_field("ollama.model"),
+                "base_url": self._get_field("ollama.base_url"),
+                "temperature": float(self._get_field("ollama.temperature")),
+                "timeout": float(self._get_field("ollama.timeout")),
+            },
+            openai={
+                "api_key": self._get_field("openai.api_key"),
+                "base_url": self._get_field("openai.base_url"),
+                "model": self._get_field("openai.model"),
+                "temperature": float(self._get_field("openai.temperature")),
+                "max_tokens": int(self._get_field("openai.max_tokens")),
+            },
+            vllm={
+                "base_url": self._get_field("vllm.base_url"),
+                "model": self._get_field("vllm.model"),
+                "api_key": self._get_field("vllm.api_key"),
+                "temperature": float(self._get_field("vllm.temperature")),
+                "timeout": float(self._get_field("vllm.timeout")),
+            },
+            rename={
+                "template": self._get_field("rename.template"),
+                "output_base_dir": self._get_field("rename.output_base_dir"),
+                "conflict_strategy": self._get_field("rename.conflict_strategy"),
+            },
+            classification={"labels": labels},
+            database={"path": self._config_loader.config.database.path},
+            log_level=self._get_field("log_level"),
+        )
+
+    def _save_config(self) -> None:
+        try:
+            new_config = self._collect_config()
+        except (ValueError, KeyError) as e:
+            QMessageBox.critical(self, "配置校验失败", str(e))
+            return
+        try:
+            self._config_loader.save(new_config)
+        except OSError as e:
+            QMessageBox.critical(self, "保存失败", f"无法写入配置文件:\n{e}")
+            return
+        self._config_status.setText("✓ 配置已保存")
+        self._config_status.setStyleSheet(f"color: {SUCCESS_FG};")
+        self._on_config_saved(new_config)
+        logger.info("GUI 配置已保存并应用")
+
+    def _reset_config(self) -> None:
+        self._init_all_fields()
+        self._config_status.setText("已重置")
+        self._config_status.setStyleSheet(f"color: {MUTED_FG};")
 
     # ── 操作日志页 ──
 
-    def _build_operations_page(self) -> None:
-        ctk.CTkLabel(
-            self._main_area, text="操作日志", font=FONT_TITLE, anchor="w",
-        ).pack(fill="x", padx=16, pady=(12, 4))
+    def _build_operations_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 12, 16, 12)
 
-        toolbar = ctk.CTkFrame(self._main_area, fg_color="transparent")
-        toolbar.pack(fill="x", padx=16, pady=(0, 8))
+        title = QLabel("操作日志")
+        title.setFont(QFont(FONT_FAMILY, 14, QFont.Weight.Bold))
+        layout.addWidget(title)
 
-        ctk.CTkButton(
-            toolbar, text="刷新", width=80, height=32,
-            fg_color=ACCENT, hover_color=ACCENT_HOVER,
-            command=self._refresh_operations,
-        ).pack(side="left", padx=(0, 6))
-        ctk.CTkButton(
-            toolbar, text="回滚选中", width=100, height=32,
-            fg_color="transparent", border_width=1,
-            text_color=("gray10", "gray90"),
-            hover_color=("gray80", "gray35"),
-            command=self._rollback_selected,
-        ).pack(side="left", padx=(0, 6))
-        ctk.CTkButton(
-            toolbar, text="删除选中", width=100, height=32,
-            fg_color="transparent", border_width=1,
-            text_color=ERROR_FG,
-            hover_color=("gray80", "gray35"),
-            command=self._delete_selected,
-        ).pack(side="left", padx=(0, 6))
-        ctk.CTkButton(
-            toolbar, text="清空全部", width=100, height=32,
-            fg_color="transparent", border_width=1,
-            text_color=ERROR_FG,
-            hover_color=("gray80", "gray35"),
-            command=self._delete_all,
-        ).pack(side="left")
+        # 工具栏
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(6)
 
-        tree_frame = ctk.CTkFrame(self._main_area, fg_color="transparent")
-        tree_frame.pack(fill="both", expand=True, padx=12, pady=(2, 12))
+        refresh_btn = QPushButton("刷新")
+        refresh_btn.setStyleSheet(f"background: {ACCENT}; color: white; border-radius: 4px; padding: 5px 16px;")
+        refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        refresh_btn.clicked.connect(self._refresh_operations)
+        toolbar.addWidget(refresh_btn)
 
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("Ops.Treeview", rowheight=30, font=FONT_SMALL)
-        style.configure("Ops.Treeview.Heading", font=(FONT_FAMILY, 10, "bold"))
+        rollback_btn = QPushButton("回滚选中")
+        rollback_btn.setStyleSheet("border: 1px solid palette(mid); border-radius: 4px; padding: 5px 16px;")
+        rollback_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        rollback_btn.clicked.connect(self._rollback_selected)
+        toolbar.addWidget(rollback_btn)
 
-        cols = ("original", "new_name", "category", "title", "status", "time")
-        self._tree = ttk.Treeview(
-            tree_frame, columns=cols, show="headings",
-            style="Ops.Treeview", height=18,
-        )
-        for col, (text, w) in [
-            ("original", ("原始文件", 160)), ("new_name", ("新文件名", 160)),
-            ("category", ("分类", 80)), ("title", ("标题", 140)),
-            ("status", ("状态", 60)), ("time", ("时间", 120)),
-        ]:
-            self._tree.heading(col, text=text)
-            self._tree.column(col, width=w, minwidth=40)
+        delete_btn = QPushButton("删除选中")
+        delete_btn.setStyleSheet(f"border: 1px solid palette(mid); border-radius: 4px; padding: 5px 16px; color: {ERROR_FG};")
+        delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        delete_btn.clicked.connect(self._delete_selected)
+        toolbar.addWidget(delete_btn)
 
-        v_scroll = ctk.CTkScrollbar(tree_frame, command=self._tree.yview)
-        self._tree.configure(yscrollcommand=v_scroll.set)
-        self._tree.pack(side="left", fill="both", expand=True)
-        v_scroll.pack(side="right", fill="y")
-        self._refresh_operations()
+        clear_btn = QPushButton("清空全部")
+        clear_btn.setStyleSheet(f"border: 1px solid palette(mid); border-radius: 4px; padding: 5px 16px; color: {ERROR_FG};")
+        clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        clear_btn.clicked.connect(self._delete_all)
+        toolbar.addWidget(clear_btn)
+
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
+
+        # 表格
+        cols = ["原始文件", "新文件名", "分类", "标题", "状态", "时间"]
+        self._table = QTableWidget(0, len(cols))
+        self._table.setHorizontalHeaderLabels(cols)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.setAlternatingRowColors(True)
+        self._table.verticalHeader().setVisible(False)
+        self._table.horizontalHeader().setStretchLastSection(True)
+
+        widths = [160, 160, 80, 140, 60, 120]
+        for i, w in enumerate(widths):
+            self._table.setColumnWidth(i, w)
+
+        layout.addWidget(self._table, 1)
+
+        # 初始加载
+        QTimer.singleShot(100, self._refresh_operations)
+
+        return page
 
     def _refresh_operations(self) -> None:
-        if not hasattr(self, "_tree"):
-            return
-        for item in self._tree.get_children():
-            self._tree.delete(item)
+        self._table.setRowCount(0)
         try:
             operations = self._on_refresh()
         except Exception as e:
-            messagebox.showerror("错误", f"刷新失败: {e}")
+            QMessageBox.critical(self, "错误", f"刷新失败: {e}")
             return
         for op in operations:
-            self._tree.insert("", "end", iid=str(op["id"]), values=(
-                op["original_name"], op["new_name"], op["category"],
-                op["title"][:30], op.get("status", ""), op["created_at"],
-            ))
+            row = self._table.rowCount()
+            self._table.insertRow(row)
+            values = [
+                op.get("original_name", ""),
+                op.get("new_name", ""),
+                op.get("category", ""),
+                (op.get("title", "") or "")[:30],
+                op.get("status", ""),
+                op.get("created_at", ""),
+            ]
+            for col, val in enumerate(values):
+                item = QTableWidgetItem(val)
+                item.setData(Qt.ItemDataRole.UserRole, op["id"])
+                self._table.setItem(row, col, item)
+
+    def _get_selected_ids(self) -> list[int]:
+        ids = set()
+        for item in self._table.selectedItems():
+            row_id = item.data(Qt.ItemDataRole.UserRole)
+            if row_id is not None:
+                ids.add(row_id)
+        return list(ids)
 
     def _rollback_selected(self) -> None:
-        if not hasattr(self, "_tree"):
+        ids = self._get_selected_ids()
+        if not ids:
+            QMessageBox.information(self, "提示", "请先选择要回滚的操作")
             return
-        selected = self._tree.selection()
-        if not selected:
-            messagebox.showinfo("提示", "请先选择要回滚的操作")
-            return
-        op_id = int(selected[0])
-        if messagebox.askyesno("确认", f"确定要回滚操作 #{op_id} 吗？"):
+        op_id = ids[0]
+        if QMessageBox.question(self, "确认", f"确定要回滚操作 #{op_id} 吗？") == QMessageBox.StandardButton.Yes:
             if self._on_rollback(op_id):
-                messagebox.showinfo("成功", "回滚成功")
+                QMessageBox.information(self, "成功", "回滚成功")
                 self._refresh_operations()
             else:
-                messagebox.showerror("失败", "回滚失败，请查看日志")
+                QMessageBox.critical(self, "失败", "回滚失败，请查看日志")
 
     def _delete_selected(self) -> None:
-        if not hasattr(self, "_tree"):
-            return
         if self._on_delete is None:
-            messagebox.showwarning("提示", "删除功能未配置")
+            QMessageBox.warning(self, "提示", "删除功能未配置")
             return
-        selected = self._tree.selection()
-        if not selected:
-            messagebox.showinfo("提示", "请先选择要删除的记录")
+        ids = self._get_selected_ids()
+        if not ids:
+            QMessageBox.information(self, "提示", "请先选择要删除的记录")
             return
-        ids = [int(iid) for iid in selected]
-        if messagebox.askyesno("确认", f"确定要删除选中的 {len(ids)} 条记录吗？"):
+        if QMessageBox.question(self, "确认", f"确定要删除选中的 {len(ids)} 条记录吗？") == QMessageBox.StandardButton.Yes:
             deleted = self._on_delete(ids)
-            messagebox.showinfo("完成", f"已删除 {deleted} 条记录")
+            QMessageBox.information(self, "完成", f"已删除 {deleted} 条记录")
             self._refresh_operations()
 
     def _delete_all(self) -> None:
-        if not hasattr(self, "_tree"):
-            return
         if self._on_delete is None:
-            messagebox.showwarning("提示", "删除功能未配置")
+            QMessageBox.warning(self, "提示", "删除功能未配置")
             return
-        if messagebox.askyesno("确认", "确定要清空所有操作记录吗？此操作不可撤销！"):
+        if QMessageBox.question(self, "确认", "确定要清空所有操作记录吗？此操作不可撤销！") == QMessageBox.StandardButton.Yes:
             deleted = self._on_delete([])
-            messagebox.showinfo("完成", f"已清空 {deleted} 条记录")
+            QMessageBox.information(self, "完成", f"已清空 {deleted} 条记录")
             self._refresh_operations()
 
     # ── 运行日志页 ──
 
-    def _build_logs_page(self) -> None:
-        ctk.CTkLabel(
-            self._main_area, text="运行日志", font=FONT_TITLE, anchor="w",
-        ).pack(fill="x", padx=16, pady=(12, 4))
+    def _build_logs_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(16, 12, 16, 12)
 
-        toolbar = ctk.CTkFrame(self._main_area, fg_color="transparent")
-        toolbar.pack(fill="x", padx=16, pady=(0, 6))
+        title = QLabel("运行日志")
+        title.setFont(QFont(FONT_FAMILY, 14, QFont.Weight.Bold))
+        layout.addWidget(title)
 
-        ctk.CTkButton(
-            toolbar, text="清空", width=70, height=30,
-            fg_color="transparent", border_width=1,
-            text_color=("gray10", "gray90"),
-            hover_color=("gray80", "gray35"),
-            font=FONT_SMALL, command=self._clear_logs,
-        ).pack(side="left")
+        toolbar = QHBoxLayout()
+        clear_btn = QPushButton("清空")
+        clear_btn.setStyleSheet("border: 1px solid palette(mid); border-radius: 4px; padding: 4px 16px;")
+        clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        clear_btn.clicked.connect(self._clear_logs)
+        toolbar.addWidget(clear_btn)
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
 
-        self._log_text = ctk.CTkTextbox(self._main_area, font=FONT_MONO, wrap="word")
-        self._log_text.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        self._log_text = QTextEdit()
+        self._log_text.setReadOnly(True)
+        self._log_text.setFont(QFont("Consolas", 10))
+        layout.addWidget(self._log_text, 1)
 
+        # 设置持久化 handler 的 widget（只设一次，不随导航销毁）
         self._text_handler.set_widget(self._log_text)
+
+        return page
 
     def _clear_logs(self) -> None:
         self._text_handler.clear_buffer()
-        if self._log_text is not None:
-            self._log_text.configure(state="normal")
-            self._log_text.delete("1.0", "end")
-            self._log_text.configure(state="disabled")
+        if self._log_text:
+            self._log_text.clear()
 
-    def _on_close(self) -> None:
-        self._root.withdraw()
+    # ── 关闭行为 ──
+
+    def closeEvent(self, event) -> None:
+        event.ignore()
+        self.hide()
 
 
-class TextHandler(logging.Handler):
-    """将日志输出到 CTkTextbox，带缓冲区，页面切换不丢日志"""
+# ── QtTextHandler ──
+
+class QtTextHandler(logging.Handler):
+    """将日志输出到 QTextEdit，带缓冲区，线程安全"""
 
     MAX_BUFFER = 500
 
     def __init__(self):
         super().__init__()
-        self._widget: ctk.CTkTextbox | None = None
+        self._widget: QTextEdit | None = None
         self._buffer: list[str] = []
 
-    def set_widget(self, widget: ctk.CTkTextbox) -> None:
+    def set_widget(self, widget: QTextEdit) -> None:
         self._widget = widget
         for msg in self._buffer:
             self._do_append(msg)
@@ -706,7 +897,7 @@ class TextHandler(logging.Handler):
             if len(self._buffer) > self.MAX_BUFFER:
                 self._buffer = self._buffer[-self.MAX_BUFFER:]
             if self._widget is not None:
-                self._widget.after(0, self._do_append, msg)
+                QTimer.singleShot(0, lambda m=msg: self._do_append(m))
         except Exception:
             pass
 
@@ -714,9 +905,10 @@ class TextHandler(logging.Handler):
         if self._widget is None:
             return
         try:
-            self._widget.configure(state="normal")
-            self._widget.insert("end", msg)
-            self._widget.configure(state="disabled")
-            self._widget.see("end")
+            cursor = self._widget.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            cursor.insertText(msg)
+            self._widget.setTextCursor(cursor)
+            self._widget.ensureCursorVisible()
         except Exception:
             pass
