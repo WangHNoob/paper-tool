@@ -203,6 +203,125 @@ class SegmentedGroup(QWidget):
                 """)
 
 
+# ── 标签列表组件 ──
+
+TAG_STYLE = """
+    QPushButton {
+        background: palette(button);
+        border: 1px solid palette(mid);
+        border-radius: 12px;
+        padding: 3px 8px;
+        font-size: 12px;
+    }
+    QPushButton:hover {
+        background: palette(alternate-base);
+    }
+"""
+
+TAG_CLOSE_STYLE = """
+    QPushButton {
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        padding: 0px;
+        font-size: 11px;
+        color: palette(window-text);
+    }
+    QPushButton:hover {
+        background: rgba(220, 38, 38, 0.15);
+        color: #DC2626;
+    }
+"""
+
+
+class TagListWidget(QWidget):
+    """标签列表组件：每个标签一个可删除的 chip + 底部添加行"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._tags: list[str] = []
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        # 标签区域
+        self._tag_container = QWidget()
+        self._tag_layout = QHBoxLayout(self._tag_container)
+        self._tag_layout.setContentsMargins(0, 0, 0, 0)
+        self._tag_layout.setSpacing(6)
+        self._tag_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self._tag_layout.addStretch()
+        layout.addWidget(self._tag_container)
+
+        # 添加行
+        add_row = QHBoxLayout()
+        add_row.setSpacing(6)
+        self._input = QLineEdit()
+        self._input.setPlaceholderText("输入新标签，回车添加")
+        self._input.setMaxLength(30)
+        self._input.returnPressed.connect(self._on_add)
+        add_row.addWidget(self._input, 1)
+
+        self._add_btn = QPushButton("添加")
+        self._add_btn.setFixedWidth(56)
+        self._add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._add_btn.setStyleSheet(f"background: {ACCENT}; color: white; border-radius: 4px; padding: 4px 8px;")
+        self._add_btn.clicked.connect(self._on_add)
+        add_row.addWidget(self._add_btn)
+        layout.addLayout(add_row)
+
+    def labels(self) -> list[str]:
+        return list(self._tags)
+
+    def set_labels(self, tags: list[str]) -> None:
+        self._tags = list(tags)
+        self._rebuild()
+
+    def _on_add(self) -> None:
+        text = self._input.text().strip()
+        if text and text not in self._tags:
+            self._tags.append(text)
+            self._insert_tag_chip(len(self._tags) - 1, text)
+            self._input.clear()
+
+    def _on_remove(self, tag: str) -> None:
+        if tag in self._tags:
+            self._tags.remove(tag)
+            self._rebuild()
+
+    def _rebuild(self) -> None:
+        while self._tag_layout.count() > 1:
+            item = self._tag_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+        for i, tag in enumerate(self._tags):
+            self._insert_tag_chip(i, tag)
+
+    def _insert_tag_chip(self, index: int, tag: str) -> None:
+        chip = QWidget()
+        row = QHBoxLayout(chip)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(2)
+
+        label = QLabel(tag)
+        label.setStyleSheet("background: transparent; border: none; font-size: 12px;")
+        row.addWidget(label)
+
+        close = QPushButton("×")
+        close.setFixedSize(18, 18)
+        close.setCursor(Qt.CursorShape.PointingHandCursor)
+        close.setStyleSheet(TAG_CLOSE_STYLE)
+        close.clicked.connect(lambda _, t=tag: self._on_remove(t))
+        row.addWidget(close)
+
+        chip.setStyleSheet(TAG_STYLE)
+        chip.setCursor(Qt.CursorShape.ArrowCursor)
+
+        self._tag_layout.insertWidget(index, chip)
+
+
 # ── GUIApp ──
 
 class GUIApp(QMainWindow):
@@ -508,8 +627,8 @@ class GUIApp(QMainWindow):
         form5.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         form5.setSpacing(8)
         self._section_header(scroll_layout, "分类")
-        self._add_field(form5, "标签 (逗号分隔):", "classification.labels")
-        scroll_layout.addLayout(form5)
+        self._tag_list = TagListWidget()
+        scroll_layout.addWidget(self._tag_list)
         scroll_layout.addStretch()
 
         return widget
@@ -618,7 +737,6 @@ class GUIApp(QMainWindow):
             "rename.template": config.rename.template,
             "rename.output_base_dir": config.rename.output_base_dir,
             "rename.conflict_strategy": config.rename.conflict_strategy,
-            "classification.labels": ", ".join(config.classification.labels),
         }
         for key, val in mapping.items():
             w = self._fields.get(key)
@@ -631,6 +749,8 @@ class GUIApp(QMainWindow):
         cb = self._fields.get("monitor.recursive")
         if isinstance(cb, QCheckBox):
             cb.setChecked(config.monitor.recursive)
+        if hasattr(self, "_tag_list"):
+            self._tag_list.set_labels(config.classification.labels)
 
     def _get_field(self, key: str) -> str:
         w = self._fields.get(key)
@@ -641,8 +761,7 @@ class GUIApp(QMainWindow):
         return ""
 
     def _collect_config(self) -> AppConfig:
-        labels_raw = self._get_field("classification.labels")
-        labels = [l.strip() for l in labels_raw.split(",") if l.strip()]
+        labels = self._tag_list.labels() if hasattr(self, "_tag_list") else []
 
         cb = self._fields.get("monitor.recursive")
         recursive = cb.isChecked() if isinstance(cb, QCheckBox) else False
