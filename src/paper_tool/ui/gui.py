@@ -222,6 +222,13 @@ class GUIApp(QMainWindow):
         # 导航按钮
         self._nav_buttons: list[QPushButton] = []
 
+        # 持久化日志 handler（必须在 _build_layout 之前初始化）
+        self._text_handler = QtTextHandler()
+        self._text_handler.setFormatter(
+            _CSTFormatter("[%(asctime)s] %(levelname)-7s %(message)s", datefmt="%H:%M:%S")
+        )
+        logging.getLogger("paper_tool").addHandler(self._text_handler)
+
         self.setWindowTitle("Paper Tool")
         self.setMinimumSize(780, 540)
         self.resize(960, 720)
@@ -232,13 +239,6 @@ class GUIApp(QMainWindow):
         # 构建布局
         self._build_layout()
         self._navigate(0)
-
-        # 持久化日志 handler
-        self._text_handler = QtTextHandler()
-        self._text_handler.setFormatter(
-            _CSTFormatter("[%(asctime)s] %(levelname)-7s %(message)s", datefmt="%H:%M:%S")
-        )
-        logging.getLogger("paper_tool").addHandler(self._text_handler)
 
     # ── 生命周期 ──
 
