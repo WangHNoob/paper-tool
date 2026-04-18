@@ -9,7 +9,7 @@ from .config.loader import ConfigLoader
 from .config.schema import AppConfig
 from .core.pipeline import Pipeline
 from .db.database import Database
-from .db.operations import list_operations
+from .db.operations import delete_all_operations, delete_operations, list_operations
 from .db.rollback import rollback_operation
 from .monitor.watcher import PDFWatcher
 from .ui.gui import GUIApp
@@ -67,6 +67,7 @@ class PaperToolApp:
             on_config_saved=self._apply_config,
             on_rollback=self._do_rollback,
             on_refresh=self._list_operations,
+            on_delete=self._do_delete,
         )
 
         # 初始化系统托盘
@@ -147,3 +148,10 @@ class PaperToolApp:
         if self._db is None:
             return []
         return list_operations(self._db, limit=100)
+
+    def _do_delete(self, ids: list[int]) -> int:
+        if self._db is None:
+            return 0
+        if ids:
+            return delete_operations(self._db, ids)
+        return delete_all_operations(self._db)

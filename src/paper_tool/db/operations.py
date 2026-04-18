@@ -61,3 +61,22 @@ def get_operation(db: Database, op_id: int) -> dict[str, Any] | None:
         "SELECT * FROM operations WHERE id = ?", (op_id,)
     ).fetchone()
     return dict(row) if row else None
+
+
+def delete_operations(db: Database, ids: list[int]) -> int:
+    """删除指定 ID 的操作记录，返回删除条数"""
+    if not ids:
+        return 0
+    placeholders = ", ".join("?" for _ in ids)
+    cursor = db.conn.execute(
+        f"DELETE FROM operations WHERE id IN ({placeholders})", ids
+    )
+    db.conn.commit()
+    return cursor.rowcount
+
+
+def delete_all_operations(db: Database) -> int:
+    """清空所有操作记录，返回删除条数"""
+    cursor = db.conn.execute("DELETE FROM operations")
+    db.conn.commit()
+    return cursor.rowcount

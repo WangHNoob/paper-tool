@@ -6,9 +6,25 @@ import sys
 from .main import PaperToolApp
 from .utils.logging import setup_logging
 
+_MUTEX_NAME = "PaperTool_SingleInstance"
+
+
+def _ensure_single_instance() -> None:
+    """通过 Windows 命名互斥体确保只有一个实例运行"""
+    if sys.platform != "win32":
+        return
+    import ctypes
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateMutexW(None, False, _MUTEX_NAME)
+    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        print("Paper Tool 已在运行")
+        sys.exit(0)
+
 
 def main() -> None:
     """应用入口函数"""
+    _ensure_single_instance()
+
     config_path = "config.yaml"
 
     # 检查命令行参数
