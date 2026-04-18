@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
@@ -495,11 +496,17 @@ class GUIApp(QMainWindow):
         layout.addWidget(self._config_seg)
         layout.addSpacing(6)
 
-        # 段容器
+        # 段容器（滚动区域）
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { background: transparent; }")
         self._seg_stack = QStackedWidget()
         self._seg_stack.addWidget(self._build_seg_general())  # 0
-        self._seg_stack.addWidget(self._build_seg_llm())      # 1
-        layout.addWidget(self._seg_stack, 1)
+        self._seg_stack.addWidget(self._build_seg_llm())     # 1
+        scroll.setWidget(self._seg_stack)
+        layout.addWidget(scroll, 1)
 
         # 底部按钮
         btn_row = QHBoxLayout()
@@ -586,14 +593,14 @@ class GUIApp(QMainWindow):
         scroll_layout.setContentsMargins(4, 8, 4, 4)
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        form.setSpacing(8)
+        form.setSpacing(6)
 
         self._section_header(scroll_layout, "基础")
         self._add_combo_field(form, "LLM 后端:", "llm_backend", ["ollama", "openai", "vllm"])
         self._add_combo_field(form, "日志级别:", "log_level", ["DEBUG", "INFO", "WARNING", "ERROR"])
 
         scroll_layout.addLayout(form)
-        scroll_layout.addSpacing(8)
+        scroll_layout.addSpacing(6)
 
         form2 = QFormLayout()
         form2.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
@@ -602,7 +609,7 @@ class GUIApp(QMainWindow):
         self._add_dir_field(form2, "监控目录:", "monitor.watch_dir")
         self._add_dir_field(form2, "输出目录:", "rename.output_base_dir")
         scroll_layout.addLayout(form2)
-        scroll_layout.addSpacing(8)
+        scroll_layout.addSpacing(6)
 
         form3 = QFormLayout()
         form3.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
@@ -614,7 +621,7 @@ class GUIApp(QMainWindow):
         self._add_field(form3, "防抖间隔 (秒):", "monitor.debounce_seconds")
         self._add_field(form3, "最大并发数:", "monitor.max_concurrency")
         scroll_layout.addLayout(form3)
-        scroll_layout.addSpacing(8)
+        scroll_layout.addSpacing(6)
 
         form4 = QFormLayout()
         form4.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
@@ -623,7 +630,7 @@ class GUIApp(QMainWindow):
         self._add_field(form4, "文件名模板:", "rename.template")
         self._add_combo_field(form4, "冲突策略:", "rename.conflict_strategy", ["append_number", "skip"])
         scroll_layout.addLayout(form4)
-        scroll_layout.addSpacing(8)
+        scroll_layout.addSpacing(6)
 
         form5 = QFormLayout()
         form5.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
@@ -666,7 +673,7 @@ class GUIApp(QMainWindow):
         self._section_header(layout, "Ollama 配置")
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        form.setSpacing(8)
+        form.setSpacing(6)
         self._add_field(form, "模型名称:", "ollama.model")
         self._add_field(form, "API 地址:", "ollama.base_url")
         self._add_field(form, "Temperature:", "ollama.temperature")
@@ -682,7 +689,7 @@ class GUIApp(QMainWindow):
         self._section_header(layout, "OpenAI 兼容 API 配置")
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        form.setSpacing(8)
+        form.setSpacing(6)
         api_key_edit = QLineEdit()
         api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self._add_field(form, "API Key:", "openai.api_key", api_key_edit)
@@ -701,7 +708,7 @@ class GUIApp(QMainWindow):
         self._section_header(layout, "vLLM 配置")
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        form.setSpacing(8)
+        form.setSpacing(6)
         api_key_edit = QLineEdit()
         api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self._add_field(form, "API Key:", "vllm.api_key", api_key_edit)
