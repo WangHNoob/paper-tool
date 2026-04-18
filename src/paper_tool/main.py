@@ -52,7 +52,7 @@ class PaperToolApp(QObject):
 
         # 启动 asyncio 线程
         self._asyncio_thread = AsyncioThread()
-        self._asyncio_thread.start()
+        self._asyncio_thread.start_and_wait()
         loop = self._asyncio_thread.loop
 
         # 初始化流水线

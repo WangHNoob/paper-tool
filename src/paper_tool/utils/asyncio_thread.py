@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import threading
 
 from PyQt6.QtCore import QThread
 
@@ -14,6 +15,7 @@ class AsyncioThread(QThread):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._ready = threading.Event()
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -24,9 +26,9 @@ class AsyncioThread(QThread):
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
+        self._ready.set()
         logger.info("AsyncioThread 事件循环已启动")
         self._loop.run_forever()
-        # 清理待完成的任务
         pending = asyncio.all_tasks(self._loop)
         for task in pending:
             task.cancel()
@@ -34,6 +36,12 @@ class AsyncioThread(QThread):
             self._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
         self._loop.close()
         logger.info("AsyncioThread 事件循环已关闭")
+
+    def start_and_wait(self, timeout: float = 5.0) -> None:
+        """启动线程并阻塞直到事件循环就绪"""
+        self.start()
+        if not self._ready.wait(timeout):
+            raise RuntimeError("AsyncioThread 启动超时")
 
     def stop(self) -> None:
         if self._loop is not None:
