@@ -64,24 +64,23 @@ LIGHT_PALETTE = {
 
 # 深色主题（柔和灰，不偏蓝黑）
 DARK_PALETTE = {
-    QPalette.ColorRole.Window: "#2B2B2B",
-    QPalette.ColorRole.WindowText: "#D4D4D4",
-    QPalette.ColorRole.Base: "#333333",
-    QPalette.ColorRole.AlternateBase: "#3A3A3A",
-    QPalette.ColorRole.Text: "#D4D4D4",
-    QPalette.ColorRole.Button: "#3C3C3C",
-    QPalette.ColorRole.ButtonText: "#D4D4D4",
+    QPalette.ColorRole.Window: "#2D2D30",
+    QPalette.ColorRole.WindowText: "#E0E0E0",
+    QPalette.ColorRole.Base: "#3C3C3C",
+    QPalette.ColorRole.AlternateBase: "#444444",
+    QPalette.ColorRole.Text: "#E0E0E0",
+    QPalette.ColorRole.Button: "#454545",
+    QPalette.ColorRole.ButtonText: "#E0E0E0",
     QPalette.ColorRole.Highlight: ACCENT,
     QPalette.ColorRole.HighlightedText: "#FFFFFF",
-    QPalette.ColorRole.ToolTipBase: "#3C3C3C",
-    QPalette.ColorRole.ToolTipText: "#D4D4D4",
-    QPalette.ColorRole.PlaceholderText: "#808080",
-    QPalette.ColorRole.Mid: "#555555",
+    QPalette.ColorRole.ToolTipBase: "#454545",
+    QPalette.ColorRole.ToolTipText: "#E0E0E0",
+    QPalette.ColorRole.PlaceholderText: "#888888",
+    QPalette.ColorRole.Mid: "#606060",
 }
 
 # QSS
 STYLE_COMMON = """
-    QMainWindow { background: transparent; }
     QPushButton {
         border: none;
         border-radius: 6px;
@@ -124,12 +123,8 @@ STYLE_COMMON = """
     }
 """
 
-SIDEBAR_LIGHT = """
-    #sidebar { background: #F0F0F0; border-right: 1px solid #D1D5DB; }
-"""
-SIDEBAR_DARK = """
-    #sidebar { background: #242424; border-right: 1px solid #444444; }
-"""
+SIDEBAR_LIGHT = "QFrame#sidebar { background: #F0F0F0; border-right: 1px solid #D1D5DB; }"
+SIDEBAR_DARK = "QFrame#sidebar { background: #242424; border-right: 1px solid #444444; }"
 
 SECTION_NAMES = ["通用", "LLM"]
 
