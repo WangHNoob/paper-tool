@@ -42,11 +42,13 @@ class GUIApp:
         on_config_saved: Callable[[AppConfig], None],
         on_rollback: Callable[[int], bool],
         on_refresh: Callable[[], list[dict]],
+        on_delete: Callable[[list[int]], int] | None = None,
     ):
         self._config_loader = config_loader
         self._on_config_saved = on_config_saved
         self._on_rollback = on_rollback
         self._on_refresh = on_refresh
+        self._on_delete = on_delete
         self._root: ctk.CTk | None = None
         self._thread: threading.Thread | None = None
         self._vars: dict[str, tk.Variable] = {}
@@ -60,6 +62,12 @@ class GUIApp:
         # LLM 子段
         self._llm_sub_frames: dict[str, ctk.CTkFrame] = {}
         self._active_llm_sub: str = ""
+        # 持久化日志 handler
+        self._text_handler = TextHandler()
+        self._text_handler.setFormatter(
+            _CSTFormatter("[%(asctime)s] %(levelname)-7s %(message)s", datefmt="%H:%M:%S")
+        )
+        logging.getLogger("paper_tool").addHandler(self._text_handler)
 
     # ── 生命周期 ──
 
@@ -141,6 +149,9 @@ class GUIApp:
         ).pack(side="left", padx=10, pady=4)
 
     def _navigate(self, page: str) -> None:
+        if self._current_page == "logs":
+            self._text_handler.clear_widget()
+
         for w in self._main_area.winfo_children():
             w.destroy()
 
@@ -532,6 +543,20 @@ class GUIApp:
             text_color=("gray10", "gray90"),
             hover_color=("gray80", "gray35"),
             command=self._rollback_selected,
+        ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(
+            toolbar, text="删除选中", width=100, height=32,
+            fg_color="transparent", border_width=1,
+            text_color=ERROR_FG,
+            hover_color=("gray80", "gray35"),
+            command=self._delete_selected,
+        ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(
+            toolbar, text="清空全部", width=100, height=32,
+            fg_color="transparent", border_width=1,
+            text_color=ERROR_FG,
+            hover_color=("gray80", "gray35"),
+            command=self._delete_all,
         ).pack(side="left")
 
         tree_frame = ctk.CTkFrame(self._main_area, fg_color="transparent")
@@ -592,6 +617,33 @@ class GUIApp:
             else:
                 messagebox.showerror("失败", "回滚失败，请查看日志")
 
+    def _delete_selected(self) -> None:
+        if not hasattr(self, "_tree"):
+            return
+        if self._on_delete is None:
+            messagebox.showwarning("提示", "删除功能未配置")
+            return
+        selected = self._tree.selection()
+        if not selected:
+            messagebox.showinfo("提示", "请先选择要删除的记录")
+            return
+        ids = [int(iid) for iid in selected]
+        if messagebox.askyesno("确认", f"确定要删除选中的 {len(ids)} 条记录吗？"):
+            deleted = self._on_delete(ids)
+            messagebox.showinfo("完成", f"已删除 {deleted} 条记录")
+            self._refresh_operations()
+
+    def _delete_all(self) -> None:
+        if not hasattr(self, "_tree"):
+            return
+        if self._on_delete is None:
+            messagebox.showwarning("提示", "删除功能未配置")
+            return
+        if messagebox.askyesno("确认", "确定要清空所有操作记录吗？此操作不可撤销！"):
+            deleted = self._on_delete([])
+            messagebox.showinfo("完成", f"已清空 {deleted} 条记录")
+            self._refresh_operations()
+
     # ── 运行日志页 ──
 
     def _build_logs_page(self) -> None:
@@ -613,13 +665,10 @@ class GUIApp:
         self._log_text = ctk.CTkTextbox(self._main_area, font=FONT_MONO, wrap="word")
         self._log_text.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
-        text_handler = TextHandler(self._log_text)
-        text_handler.setFormatter(
-            _CSTFormatter("[%(asctime)s] %(levelname)-7s %(message)s", datefmt="%H:%M:%S")
-        )
-        logging.getLogger("paper_tool").addHandler(text_handler)
+        self._text_handler.set_widget(self._log_text)
 
     def _clear_logs(self) -> None:
+        self._text_handler.clear_buffer()
         if self._log_text is not None:
             self._log_text.configure(state="normal")
             self._log_text.delete("1.0", "end")
@@ -630,20 +679,40 @@ class GUIApp:
 
 
 class TextHandler(logging.Handler):
-    """将日志输出到 CTkTextbox"""
+    """将日志输出到 CTkTextbox，带缓冲区，页面切换不丢日志"""
 
-    def __init__(self, text_widget: ctk.CTkTextbox):
+    MAX_BUFFER = 500
+
+    def __init__(self):
         super().__init__()
-        self._widget = text_widget
+        self._widget: ctk.CTkTextbox | None = None
+        self._buffer: list[str] = []
+
+    def set_widget(self, widget: ctk.CTkTextbox) -> None:
+        self._widget = widget
+        for msg in self._buffer:
+            self._do_append(msg)
+
+    def clear_widget(self) -> None:
+        self._widget = None
+
+    def clear_buffer(self) -> None:
+        self._buffer.clear()
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            msg = self.format(record)
-            self._widget.after(0, self._append, msg + "\n")
+            msg = self.format(record) + "\n"
+            self._buffer.append(msg)
+            if len(self._buffer) > self.MAX_BUFFER:
+                self._buffer = self._buffer[-self.MAX_BUFFER:]
+            if self._widget is not None:
+                self._widget.after(0, self._do_append, msg)
         except Exception:
             pass
 
-    def _append(self, msg: str) -> None:
+    def _do_append(self, msg: str) -> None:
+        if self._widget is None:
+            return
         try:
             self._widget.configure(state="normal")
             self._widget.insert("end", msg)
