@@ -26,7 +26,7 @@ class Pipeline:
         self._config = config
         self._db = db
         self._extractor = PyMuPDFExtractor()
-        self._queue = ProcessingQueue(max_concurrency=2)
+        self._queue = ProcessingQueue(max_concurrency=config.monitor.max_concurrency)
         self._classifier: PaperClassifier | None = None
         self._mover = FileMover(conflict_strategy=config.rename.conflict_strategy)
         self._running = False

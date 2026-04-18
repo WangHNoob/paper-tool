@@ -13,6 +13,10 @@ venv/
 *.db
 data/
 config.yaml
+.Sorted/
+Sorted/
+.Inbox/
+Inbox/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -23,3 +27,7 @@ htmlcov/
 .vscode/
 *.swp
 *.swo
+.DS_Store
+Thumbs.db
+.claude/
+skills-lock.json

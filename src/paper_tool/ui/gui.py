@@ -612,6 +612,7 @@ class GUIApp(QMainWindow):
         self._fields["monitor.recursive"] = cb
         form3.addRow("", cb)
         self._add_field(form3, "防抖间隔 (秒):", "monitor.debounce_seconds")
+        self._add_field(form3, "最大并发数:", "monitor.max_concurrency")
         scroll_layout.addLayout(form3)
         scroll_layout.addSpacing(8)
 
@@ -721,6 +722,7 @@ class GUIApp(QMainWindow):
             "log_level": config.log_level,
             "monitor.watch_dir": config.monitor.watch_dir,
             "monitor.debounce_seconds": str(config.monitor.debounce_seconds),
+            "monitor.max_concurrency": str(config.monitor.max_concurrency),
             "ollama.model": config.ollama.model,
             "ollama.base_url": config.ollama.base_url,
             "ollama.temperature": str(config.ollama.temperature),
@@ -772,6 +774,7 @@ class GUIApp(QMainWindow):
                 "watch_dir": self._get_field("monitor.watch_dir"),
                 "recursive": recursive,
                 "debounce_seconds": float(self._get_field("monitor.debounce_seconds")),
+                "max_concurrency": int(self._get_field("monitor.max_concurrency")),
             },
             llm_backend=self._get_field("llm_backend"),
             ollama={

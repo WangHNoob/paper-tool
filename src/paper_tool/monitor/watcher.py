@@ -43,36 +43,48 @@ class PDFWatchHandler(FileSystemEventHandler):
 
         path = Path(event.src_path)
 
-        # 检查扩展名
+        # 检查扩展名（同步）
         if path.suffix.lower() not in self._config.file_extensions:
             return
 
-        # 防抖：同一文件在 debounce_seconds 内不重复处理
+        # 防抖（同步）
         now = time.monotonic()
         last_time = self._last_events.get(str(path), 0)
         if now - last_time < self._config.debounce_seconds:
             return
+
+        # TTL 清理：移除 1 小时前的旧条目，防止内存泄漏
+        if len(self._last_events) > 1000:
+            cutoff = now - 3600
+            self._last_events = {k: v for k, v in self._last_events.items() if v > cutoff}
+
         self._last_events[str(path)] = now
 
-        # 检查文件是否就绪（独占打开测试）
-        if not self._is_file_ready(path):
+        # 文件就绪检查和 PDF 验证都在线程中执行，不阻塞 watchdog 线程
+        asyncio.run_coroutine_threadsafe(self._check_and_submit(path), self._loop)
+
+    async def _check_and_submit(self, path: Path) -> None:
+        """异步检查文件就绪和 PDF 头，然后入队（不阻塞事件循环）"""
+        # 文件就绪检查（线程中执行）
+        ready = await asyncio.to_thread(self._is_file_ready, path)
+        if not ready:
             logger.warning("文件未就绪，跳过: %s", path.name)
             return
 
-        # 验证 PDF 头
-        if not self._is_pdf(path):
+        # PDF 头验证（线程中执行）
+        is_pdf = await asyncio.to_thread(self._is_pdf, path)
+        if not is_pdf:
             logger.warning("不是有效的 PDF 文件: %s", path.name)
             return
 
         logger.info("检测到新 PDF: %s", path.name)
-        asyncio.run_coroutine_threadsafe(self._queue.put(path), self._loop)
+        await self._queue.put(path)
 
     def _is_file_ready(self, path: Path) -> bool:
-        """检查文件是否已经完全写入（独占打开测试）"""
+        """检查文件是否已经完全写入"""
         for _ in range(3):
             try:
                 with open(path, "rb") as f:
-                    # 尝试独占打开
                     pass
                 if path.stat().st_size > 0:
                     return True

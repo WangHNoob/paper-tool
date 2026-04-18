@@ -58,4 +58,8 @@ def render_template(
     while "//" in result:
         result = result.replace("//", "/")
 
-    return Path(output_base_dir) / result
+    target = (Path(output_base_dir) / result).resolve()
+    base = Path(output_base_dir).resolve()
+    if not target.is_relative_to(base):
+        raise ValueError(f"禁止路径穿越: {target} 超出输出目录 {base}")
+    return target

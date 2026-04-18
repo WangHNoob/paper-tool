@@ -57,11 +57,26 @@ class PaperClassifier:
         system_text = self._custom_prompt.replace(
             "{labels}", "\n".join(f"- {l}" for l in self._labels)
         )
-        text = paper_info.text[:8000] if len(paper_info.text) > 8000 else paper_info.text
+        text = self._sanitize_prompt_text(paper_info.text[:8000] if len(paper_info.text) > 8000 else paper_info.text)
         return [
             SystemMessage(content=system_text),
             HumanMessage(content=f"文件名: {paper_info.file_name}\n\n{text}"),
         ]
+
+    @staticmethod
+    def _sanitize_prompt_text(text: str) -> str:
+        """移除潜在的提示词注入内容"""
+        lines = text.splitlines()
+        blocked = {
+            "ignore", "disregard", "previous", "system prompt",
+            "you are now", "you now have", "forget all",
+            "override", "new instruction",
+        }
+        cleaned = [
+            line for line in lines
+            if not any(b in line.lower() for b in blocked)
+        ]
+        return "\n".join(cleaned)
 
     async def classify(self, paper_info: PaperInfo) -> tuple[PaperInfo, ClassifyResult]:
         """用 LLM 提取元数据并分类"""
@@ -106,7 +121,7 @@ class PaperClassifier:
         if self._chat_model is None:
             return self.fallback_classify(paper_info)
 
-        text = paper_info.text[:3000]
+        text = self._sanitize_prompt_text(paper_info.text[:3000])
         prompt = FALLBACK_PROMPT.replace("{text}", text)
 
         try:

@@ -10,6 +10,14 @@ class MonitorConfig(BaseModel):
     recursive: bool = False
     debounce_seconds: float = 3.0
     file_extensions: list[str] = Field(default_factory=lambda: [".pdf"])
+    max_concurrency: int = 2
+
+    @field_validator("max_concurrency")
+    @classmethod
+    def validate_concurrency(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("max_concurrency 必须 >= 1")
+        return v
 
     @field_validator("debounce_seconds")
     @classmethod
