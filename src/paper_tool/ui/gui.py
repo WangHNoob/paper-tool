@@ -90,8 +90,8 @@ STYLE_COMMON = """
     QLineEdit, QComboBox {
         border: 1px solid palette(mid);
         border-radius: 4px;
-        padding: 4px 8px;
-        min-height: 28px;
+        padding: 5px 8px;
+        min-height: 32px;
     }
     QLineEdit:focus, QComboBox:focus {
         border-color: """ + ACCENT + """;
