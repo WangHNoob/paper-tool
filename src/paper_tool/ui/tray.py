@@ -1,28 +1,40 @@
-"""系统托盘 (pystray)"""
+"""系统托盘 (QSystemTrayIcon)"""
 
 import logging
-import threading
 from typing import Callable
 
-from PIL import Image, ImageDraw
+from PyQt6.QtCore import QObject, Qt
+from PyQt6.QtGui import QBrush, QColor, QPen, QPixmap, QIcon
+from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
 
 logger = logging.getLogger(__name__)
 
 
-def _create_icon_image() -> Image.Image:
-    """创建默认托盘图标"""
+def _create_icon() -> QIcon:
+    """程序化生成托盘图标"""
     size = 64
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    # 简单的文档图标
-    draw.rectangle([12, 4, 52, 60], fill=(52, 152, 219), outline=(41, 128, 185))
-    draw.rectangle([20, 14, 44, 18], fill=(255, 255, 255))
-    draw.rectangle([20, 22, 44, 26], fill=(255, 255, 255))
-    draw.rectangle([20, 30, 40, 34], fill=(255, 255, 255))
-    return image
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    from PyQt6.QtGui import QPainter
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    # 文档图标
+    painter.setBrush(QBrush(QColor(52, 152, 219)))
+    painter.setPen(QPen(QColor(41, 128, 185), 1))
+    painter.drawRoundedRect(12, 4, 40, 56, 4, 4)
+
+    # 文本行
+    painter.setBrush(QBrush(QColor(255, 255, 255)))
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawRect(20, 14, 24, 4)
+    painter.drawRect(20, 22, 24, 4)
+    painter.drawRect(20, 30, 20, 4)
+    painter.end()
+    return QIcon(pixmap)
 
 
-class TrayApp:
+class TrayApp(QObject):
     """系统托盘应用"""
 
     def __init__(
@@ -31,50 +43,49 @@ class TrayApp:
         on_resume: Callable[[], None],
         on_show_gui: Callable[[], None],
         on_quit: Callable[[], None],
+        parent=None,
     ):
+        super().__init__(parent)
         self._on_pause = on_pause
         self._on_resume = on_resume
         self._on_show_gui = on_show_gui
         self._on_quit = on_quit
         self._paused = False
-        self._thread: threading.Thread | None = None
-        self._icon = None
 
-    def start(self) -> None:
-        """在独立线程中启动托盘"""
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+        self._icon = QSystemTrayIcon(_create_icon(), self)
+
+        menu = QMenu()
+        menu.addAction("显示窗口", self._show_gui)
+        self._pause_action = menu.addAction("暂停监控", self._toggle_pause)
+        menu.addSeparator()
+        menu.addAction("退出", self._quit)
+        self._icon.setContextMenu(menu)
+
+        self._icon.activated.connect(self._on_activated)
+        self._icon.setToolTip("Paper Tool")
+
+    def show(self) -> None:
+        self._icon.show()
 
     def stop(self) -> None:
-        """停止托盘"""
-        if self._icon is not None:
-            self._icon.stop()
+        self._icon.hide()
 
-    def _run(self) -> None:
-        """托盘主循环"""
-        import pystray
-
-        image = _create_icon_image()
-        menu = pystray.Menu(
-            pystray.MenuItem("显示窗口", self._show_gui),
-            pystray.MenuItem("暂停监控", self._toggle_pause),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("退出", self._quit),
-        )
-        self._icon = pystray.Icon("paper_tool", image, "Paper Tool", menu)
-        self._icon.run()
-
-    def _show_gui(self, icon, item) -> None:
+    def _show_gui(self) -> None:
         self._on_show_gui()
 
-    def _toggle_pause(self, icon, item) -> None:
+    def _toggle_pause(self) -> None:
         if self._paused:
             self._on_resume()
             self._paused = False
+            self._pause_action.setText("暂停监控")
         else:
             self._on_pause()
             self._paused = True
+            self._pause_action.setText("恢复监控")
 
-    def _quit(self, icon, item) -> None:
+    def _quit(self) -> None:
         self._on_quit()
-        icon.stop()
+
+    def _on_activated(self, reason) -> None:
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self._show_gui()

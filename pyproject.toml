@@ -11,9 +11,7 @@ dependencies = [
     "langchain-ollama>=0.2.0",
     "pydantic>=2.0.0",
     "pyyaml>=6.0",
-    "pystray>=0.19.0",
-    "pillow>=10.0.0",
-    "customtkinter>=5.2.0",
+    "PyQt6>=6.6.0",
 ]
 
 [project.optional-dependencies]
